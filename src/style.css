@@ -4,3 +4,5 @@ html, body, #root { margin: 0; width: 100%; height: 100%; }
 .login { min-height: 100dvh; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 14px; font-family: system-ui; background: #f7f5ff; }
 .login h1 { margin: 0; } .login p { margin: 0; } .login input { font-size: 24px; width: 190px; padding: 12px; text-align: center; border: 1px solid #aaa; border-radius: 9px; }
 .login button { padding: 12px 30px; border: 0; border-radius: 9px; background: #6954db; color: white; font-size: 16px; cursor: pointer; }
+
+.theme-toggle { position: absolute; z-index: 30; right: 12px; top: 46px; padding: 7px 11px; border-radius: 8px; border: 1px solid #8886; background: #f8f8f8; color: #222; font: 13px system-ui; cursor: pointer; box-shadow: 0 2px 6px #0002; }

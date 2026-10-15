@@ -161,6 +161,6 @@ function App() {
   }
 
   if (!authorized) return <form className="login" onSubmit={login}><h1>Our Whiteboard ♡</h1><p>Enter our 6-digit code</p><input aria-label="6-digit code" type="password" inputMode="numeric" autoComplete="off" maxLength={6} pattern="[0-9]{6}" required value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ""))}/><button type="submit">Open board</button><p role="alert">{loginError}</p></form>;
-  return <main className="board"><div className="connection-status" role="status">{status}</div><button type="button" className="theme-toggle" onClick={toggleTheme} aria-label="Toggle dark mode">{theme === "dark" ? "☀️ Light" : "🌙 Dark"}</button><Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} name="Our Whiteboard" /></main>;
+  return <main className="board"><button type="button" className="theme-toggle" title="Change theme" onClick={toggleTheme} aria-label="Toggle dark mode">{theme === "dark" ? "☀️ Light" : "🌙 Dark"}</button><Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} name="Our Whiteboard" /></main>;
 }
 createRoot(document.getElementById("root")).render(<App />);

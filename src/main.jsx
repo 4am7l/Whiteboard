@@ -111,7 +111,8 @@ function App() {
       if (!drag.moved && Math.hypot(dx, dy) < 5) return;
       drag.moved = true;
       event.preventDefault();
-      api.updateScene({ appState: { scrollX: drag.scrollX + dx, scrollY: drag.scrollY + dy } });
+      const zoom = api.getAppState().zoom?.value || 1;
+      api.updateScene({ appState: { scrollX: drag.scrollX + dx / zoom, scrollY: drag.scrollY + dy / zoom } });
     }
     function up(event) {
       if (event.button !== 2 || !drag) return;

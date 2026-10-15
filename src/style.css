@@ -326,3 +326,20 @@ html, body, #root { margin: 0; width: 100%; height: 100%; }
   z-index:1000!important;
 }
 .board .excalidraw .App-menu_top{pointer-events:auto}
+
+/* Excalidraw's UI wrapper, not just the toolbar, must outrank sibling overlays.
+   Remove the canvas stacking isolation so the toolbar can escape it. */
+.board .excalidraw{isolation:auto!important;transform:none!important;filter:none!important;contain:none!important}
+.board .excalidraw .layer-ui__wrapper,
+.board .excalidraw .layer-ui__wrapper .App-menu_top,
+.board .excalidraw .layer-ui__wrapper .App-toolbar,
+.board .excalidraw .layer-ui__wrapper .App-toolbar-container{
+  z-index:2147483000!important;
+}
+.board .excalidraw .layer-ui__wrapper{position:absolute!important;inset:0!important;pointer-events:none!important}
+.board .excalidraw .layer-ui__wrapper button,
+.board .excalidraw .layer-ui__wrapper input,
+.board .excalidraw .layer-ui__wrapper [role="toolbar"],
+.board .excalidraw .layer-ui__wrapper .App-menu_top,
+.board .excalidraw .layer-ui__wrapper .App-toolbar,
+.board .excalidraw .layer-ui__wrapper .App-toolbar-container{pointer-events:auto!important}

@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS sticker_placements (
+ id TEXT PRIMARY KEY,
+ sticker_id TEXT NOT NULL,
+ x REAL NOT NULL,
+ y REAL NOT NULL,
+ width REAL NOT NULL DEFAULT 150,
+ updated_at INTEGER NOT NULL
+);

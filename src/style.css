@@ -383,3 +383,14 @@ html, body, #root { margin: 0; width: 100%; height: 100%; }
 .doodle-panel .sticker-grid{max-height:45vh!important;overflow:auto!important}
 .doodle-panel .sticker-tabs{flex-wrap:wrap}
 @media(max-width:600px){.doodle-panel-trigger{top:72px;right:10px}.doodle-panel{top:118px;right:8px;bottom:8px;width:min(340px,calc(100vw - 16px))}}
+
+/* Native Excalidraw library is superseded by our standalone Stickers panel. */
+.excalidraw [data-testid="library-button"],
+.excalidraw [data-testid="library-menu-trigger"],
+.excalidraw .library-button,
+.excalidraw .sidebar-trigger[data-name="library"],
+.excalidraw button[aria-label="Library"],
+.excalidraw button[title="Library"],
+.excalidraw .sidebar[data-name="library"],
+.excalidraw .library-menu,
+.excalidraw .layer-ui__library {display:none!important}

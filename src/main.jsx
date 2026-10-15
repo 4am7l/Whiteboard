@@ -20,6 +20,9 @@ function App() {
   const [libraryHost,setLibraryHost]=useState(null);
   const [searchQuery,setSearchQuery]=useState("");
   const [searchKind,setSearchKind]=useState("stickers");
+  const [searchSource,setSearchSource]=useState("giphy");
+  const [favoriteIds,setFavoriteIds]=useState([]);
+  const [stickerTab,setStickerTab]=useState("saved");
   const [searchItems,setSearchItems]=useState([]);
   const [searchBusy,setSearchBusy]=useState(false);
   const [stickers,setStickers]=useState([]);
@@ -174,21 +177,32 @@ function App() {
     if(!searchQuery.trim())return;
     setSearchBusy(true);setStickerError("");
     try {
-      const r=await fetch("/api/sticker-search?q="+encodeURIComponent(searchQuery)+"&kind="+searchKind);
+      const r=await fetch("/api/sticker-search?q="+encodeURIComponent(searchQuery)+"&kind="+searchKind+"&source="+searchSource);
       const data=await r.json();
       if(!r.ok)throw Error(data.error||"Search failed");
       setSearchItems(data.items);
     }catch(e){setStickerError(e.message)}
     finally{setSearchBusy(false)}
   }
-  async function importSticker(item) {
+  async function toggleFavorite(id) {
+    const saved=favoriteIds.includes(id);
+    try {
+      const r=await fetch("/api/sticker-favorites"+(saved?"?id="+encodeURIComponent(id):""),{method:saved?"DELETE":"POST",headers:{"Content-Type":"application/json"},...(saved?{}:{body:JSON.stringify({id})})});
+      if(!r.ok)throw Error("Could not update favorites");
+      setFavoriteIds(old=>saved?old.filter(x=>x!==id):[...old,id]);
+    }catch(e){setStickerError(e.message)}
+  }
+  async function importSticker(item,asFavorite=false) {
     setStickerError("");
     try {
       const r=await fetch("/api/sticker-import",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:item.url,name:item.title})});
       const data=await r.json();
       if(!r.ok)throw Error(data.error||"Import failed");
       await loadStickers();
-      await placeSticker({id:data.id});
+      if(asFavorite) {
+        const fav=await fetch("/api/sticker-favorites",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:data.id})});
+        if(fav.ok)setFavoriteIds(old=>[...old,data.id]);
+      }else await placeSticker({id:data.id});
     }catch(e){setStickerError(e.message)}
   }
   async function loadStickers() {
@@ -198,7 +212,7 @@ function App() {
       setStickers((await r.json()).stickers);
     }catch(e){setStickerError(e.message)}
   }
-  useEffect(()=>{if(!authorized)return;loadStickers();},[authorized]);
+  useEffect(()=>{if(!authorized)return;loadStickers();fetch("/api/sticker-favorites").then(r=>r.ok?r.json():null).then(d=>{if(d)setFavoriteIds(d.ids)}).catch(()=>{});},[authorized]);
   useEffect(()=>{
     if(!authorized)return;
     let active=true;
@@ -289,15 +303,22 @@ function App() {
     {libraryHost&&createPortal(<section className={`sticker-library-inline ${theme==="dark"?"pattern-dark":"pattern-light"}`}>
       <button type="button" className="sticker-section-toggle" onClick={()=>setStickerMenu(v=>!v)}>♡ Stickers {stickerMenu?"▴":"▾"}</button>
       {stickerMenu&&<div className="sticker-library-content">
-        <label className="sticker-upload">＋ Upload PNG / JPG / WebP / GIF<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple onChange={uploadSticker} hidden/></label>
-        <form className="sticker-search" onSubmit={searchGiphy}>
-          <input aria-label="Search GIFs and stickers" placeholder="Search stickers or GIFs…" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}/>
-          <select aria-label="Search type" value={searchKind} onChange={e=>setSearchKind(e.target.value)}><option value="stickers">Stickers</option><option value="gif">GIFs</option></select>
-          <button type="submit" disabled={searchBusy}>{searchBusy?"…":"Search"}</button>
-        </form>
-        <div className="sticker-grid">{searchItems.map(item=><button type="button" key={item.id} title={"Save and add "+item.title} onClick={()=>importSticker(item)}><img src={item.preview} alt={item.title}/></button>)}</div>
-        <strong>Our saved stickers</strong>
-        <div className="sticker-grid">{stickers.map(sticker=><button type="button" key={sticker.id} title={sticker.name} onClick={()=>placeSticker(sticker)}><img src={sticker.url} alt={sticker.name}/></button>)}</div>
+        <div className="sticker-tabs">{[["saved","Saved"],["favorites","♡ Favorites"],["search","Search"]].map(([id,label])=><button type="button" key={id} className={stickerTab===id?"active":""} onClick={()=>setStickerTab(id)}>{label}</button>)}</div>
+        {stickerTab==="saved"&&<>
+          <label className="sticker-upload">＋ Upload PNG / JPG / WebP / GIF<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple onChange={uploadSticker} hidden/></label>
+          <div className="sticker-grid">{stickers.map(sticker=><div className="sticker-tile" key={sticker.id}><button type="button" title={sticker.name} onClick={()=>placeSticker(sticker)}><img src={sticker.url} alt={sticker.name}/></button><button type="button" className="favorite-action" aria-label="Toggle favorite" onClick={()=>toggleFavorite(sticker.id)}>{favoriteIds.includes(sticker.id)?"♥":"♡"}</button></div>)}</div>
+        </>}
+        {stickerTab==="favorites"&&<div className="sticker-grid">{stickers.filter(s=>favoriteIds.includes(s.id)).map(sticker=><div className="sticker-tile" key={sticker.id}><button type="button" onClick={()=>placeSticker(sticker)}><img src={sticker.url} alt={sticker.name}/></button><button type="button" className="favorite-action" onClick={()=>toggleFavorite(sticker.id)} aria-label="Remove favorite">♥</button></div>)}</div>}
+        {stickerTab==="search"&&<>
+          <form className="sticker-search" onSubmit={searchGiphy}>
+            <input aria-label="Search GIFs and stickers" placeholder="Search stickers or GIFs…" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}/>
+            <select aria-label="Sticker source" value={searchSource} onChange={e=>{setSearchSource(e.target.value);setSearchItems([])}}><option value="giphy">GIPHY</option><option value="commons">Wikimedia Commons</option></select>
+            {searchSource==="giphy"&&<select aria-label="Search type" value={searchKind} onChange={e=>setSearchKind(e.target.value)}><option value="stickers">Stickers</option><option value="gif">GIFs</option></select>}
+            <button type="submit" disabled={searchBusy}>{searchBusy?"…":"Search"}</button>
+          </form>
+          <div className="sticker-grid">{searchItems.map(item=><div className="sticker-tile" key={item.id}><button type="button" title={"Save and add "+item.title} onClick={()=>importSticker(item)}><img src={item.preview} alt={item.title}/></button><button type="button" className="favorite-action" title="Save to favorites" onClick={()=>importSticker(item,true)}>♡</button></div>)}</div>
+          <small>GIFs by GIPHY · Images from Wikimedia Commons (check individual licenses)</small>
+        </>}
         {stickerError&&<small role="alert">{stickerError}</small>}
       </div>}
     </section>,libraryHost)}

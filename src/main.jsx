@@ -94,6 +94,49 @@ function App() {
     return () => { active = false; clearInterval(timer); };
   }, [api, authorized]);
 
+  useEffect(() => {
+    if (!authorized || !api) return;
+    const root = document.querySelector(".board .excalidraw");
+    if (!root) return;
+    let drag = null;
+    let suppressMenu = false;
+    function down(event) {
+      if (event.button !== 2 || !event.target.closest(".excalidraw__canvas")) return;
+      drag = { x: event.clientX, y: event.clientY, scrollX: api.getAppState().scrollX, scrollY: api.getAppState().scrollY, moved: false };
+    }
+    function move(event) {
+      if (!drag || !(event.buttons & 2)) return;
+      const dx = event.clientX - drag.x;
+      const dy = event.clientY - drag.y;
+      if (!drag.moved && Math.hypot(dx, dy) < 5) return;
+      drag.moved = true;
+      event.preventDefault();
+      api.updateScene({ appState: { scrollX: drag.scrollX + dx, scrollY: drag.scrollY + dy } });
+    }
+    function up(event) {
+      if (event.button !== 2 || !drag) return;
+      suppressMenu = drag.moved;
+      drag = null;
+    }
+    function context(event) {
+      if (suppressMenu || drag?.moved) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+      suppressMenu = false;
+    }
+    root.addEventListener("pointerdown", down, true);
+    window.addEventListener("pointermove", move, true);
+    window.addEventListener("pointerup", up, true);
+    root.addEventListener("contextmenu", context, true);
+    return () => {
+      root.removeEventListener("pointerdown", down, true);
+      window.removeEventListener("pointermove", move, true);
+      window.removeEventListener("pointerup", up, true);
+      root.removeEventListener("contextmenu", context, true);
+    };
+  }, [api, authorized]);
+
   function onChange(elements) {
     if (!loaded.current || applying.current) return;
     for (const element of elements) {

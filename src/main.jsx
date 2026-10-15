@@ -384,6 +384,7 @@ function App() {
 
   function onChange(elements, appState) {
     const images=elements.filter(e=>e.type==="image"&&!e.isDeleted&&String(e.fileId||"").startsWith("sticker:"));
+    const voices=elements.filter(e=>!e.isDeleted&&e.customData?.voiceNoteId);
     const liveZoom=appState?.zoom?.value||1,liveX=appState?.scrollX||0,liveY=appState?.scrollY||0;
     // Update GIF geometry immediately, without waiting for a React render while dragging.
     for(const element of voices){
@@ -405,7 +406,6 @@ function App() {
       img.style.opacity=String((element.opacity??100)/100);
     }
     setSceneImages(old=>old.length===images.length&&old.every((e,i)=>e===images[i])?old:images);
-    const voices=elements.filter(e=>!e.isDeleted&&e.customData?.voiceNoteId);
     setVoiceCards(old=>old.length===voices.length&&old.every((e,i)=>e===voices[i])?old:voices);
     if (appState) {
       const next = { zoom: appState.zoom?.value || 1, x: appState.scrollX || 0, y: appState.scrollY || 0 };

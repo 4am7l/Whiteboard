@@ -170,17 +170,19 @@
 .workspace .board.board-media-selected .excalidraw .App-menu_left{
   display:none!important;
 }
-/* Shift the original Excalidraw color/properties menu directly below the
-   lock control, visually grouping both in the left appearance area. */
+/* Two Lock controls are intentional: keep the native right-click menu Lock/Unlock
+   alongside our always-visible selection button.
+   Put the native appearance panel BELOW the top lock card, not under it. */
 .workspace .board.board-single-selected:not(.board-locked-selected):not(.board-media-selected) .excalidraw .App-menu_left{
-  margin-top:64px!important;
+  position:fixed!important;
+  top:calc(151px + env(safe-area-inset-top))!important;
+  left:calc(14px + env(safe-area-inset-left))!important;
+  bottom:auto!important;
+  margin-top:0!important;
+  max-height:calc(100dvh - 175px - env(safe-area-inset-top) - env(safe-area-inset-bottom))!important;
+  overflow-y:auto;
 }
-/* Use the dedicated Lock / Unlock control in the selection toolbar only.
-   Excalidraw's duplicated context-menu lock option is hidden. */
-.context-menu li[data-testid="toggleElementLock"],
-.context-menu [data-testid="toggleElementLock"]{display:none!important}
-/* The native menu offers editing actions that are not applicable to a locked selection. */
-body:has(.board.board-locked-selected) .context-menu{display:none!important}
+/* Keep native context-menu actions including the original Lock/Unlock option. */
 
 /* Visible selection rectangle for dragging from locked elements. */
 .board-selection-marquee{
@@ -219,6 +221,7 @@ body:has(.board.board-locked-selected) .context-menu{display:none!important}
   .workspace-toolbox-label{display:none}
   .workspace-toolbox .workspace-toolbar{width:min(334px,calc(100vw - 18px));max-height:calc(100dvh - 75px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
   .workspace .appearance-lock-bar{top:calc(67px + env(safe-area-inset-top));left:calc(9px + env(safe-area-inset-left));max-width:calc(100vw - 18px)}
+  .workspace .board.board-single-selected:not(.board-locked-selected):not(.board-media-selected) .excalidraw .App-menu_left{top:calc(145px + env(safe-area-inset-top))!important;left:calc(9px + env(safe-area-inset-left))!important;max-height:calc(100dvh - 167px - env(safe-area-inset-top) - env(safe-area-inset-bottom))!important}
   .workspace-toolbar .sticker-grid{max-height:33dvh}
 }
 @media(prefers-reduced-motion:reduce){

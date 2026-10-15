@@ -266,10 +266,10 @@ function App() {
     const update=()=>{
       const boardRect=board.getBoundingClientRect();
       let left=0,right=0;
-      const candidates=board.querySelectorAll('.excalidraw .sidebar, .excalidraw [data-testid="sidebar"], .excalidraw .library-menu, .excalidraw .layer-ui__library');
+      const candidates=board.querySelectorAll('.excalidraw .sidebar, .excalidraw [data-testid="sidebar"], .excalidraw .library-menu, .excalidraw .layer-ui__library, .excalidraw .App-menu_left .Island, .excalidraw .App-menu_left .App-menu__left, .excalidraw .App-menu_left .panelColumn, .excalidraw .App-menu_left .properties-content, .excalidraw .App-menu_left .App-menu__left__content');
       for(const node of candidates){
         const rect=node.getBoundingClientRect();
-        if(rect.width<140||rect.height<120||rect.bottom<=boardRect.top||rect.top>=boardRect.bottom)continue;
+        if(rect.width<140||rect.height<120||rect.width>boardRect.width*.65||rect.bottom<=boardRect.top||rect.top>=boardRect.bottom)continue;
         if(getComputedStyle(node).visibility==="hidden"||getComputedStyle(node).display==="none")continue;
         if(rect.right>=boardRect.right-24)right=Math.max(right,boardRect.right-rect.left);
         if(rect.left<=boardRect.left+24)left=Math.max(left,rect.right-boardRect.left);

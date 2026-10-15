@@ -102,39 +102,79 @@
 .workspace-toolbar :is(input,select,button){max-width:100%}
 .workspace button:focus-visible{outline:2px solid #9176f4;outline-offset:2px}
 
-/* The existing Lock / Unlock / Locked selection only controls remain,
-   but no longer consume a full-width horizontal row. */
-.workspace .selection-toolbar{
-  position:fixed;top:calc(78px + env(safe-area-inset-top));left:calc(12px + env(safe-area-inset-left));
-  right:auto;bottom:auto;z-index:300;box-sizing:border-box;
-  display:flex;flex-direction:column;align-items:flex-start;gap:8px;
-  width:max-content;max-width:min(325px,calc(100vw - 24px));
-  max-height:calc(100dvh - 112px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
-  overflow-y:auto;overscroll-behavior:contain;
-  padding:10px 12px;border:1px solid var(--line);border-radius:15px;
-  background:rgba(255,255,255,.89);color:var(--panel-text);
-  box-shadow:0 8px 25px #0002;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+/* Single-element appearance: a lock action docked to the same left-side
+   area as Excalidraw's property/color controls, rather than a separate toolbar. */
+.workspace .appearance-lock-bar{
+  position:fixed;
+  top:calc(72px + env(safe-area-inset-top));
+  left:calc(14px + env(safe-area-inset-left));
+  right:auto;
+  bottom:auto;
+  z-index:350;
+  box-sizing:border-box;
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  gap:7px;
+  width:210px;
+  max-width:calc(100vw - 28px);
+  padding:9px 10px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:rgba(255,255,255,.92);
+  color:var(--panel-text);
+  box-shadow:0 5px 16px #0002;
+  backdrop-filter:blur(16px);
+  -webkit-backdrop-filter:blur(16px);
 }
-.workspace-dark .selection-toolbar{background:rgba(38,36,48,.89)}
-.selection-lock{
-  min-height:42px;padding:8px 14px;border:1px solid var(--line);border-radius:10px;
-  background:var(--panel-bg);color:var(--panel-text);font:600 13px system-ui;
-  cursor:pointer;touch-action:manipulation;
+.workspace-dark .appearance-lock-bar{background:rgba(39,38,49,.93)}
+.workspace .appearance-lock-bar .selection-lock{
+  display:flex;align-items:center;justify-content:center;gap:5px;
+  width:100%;min-height:39px;padding:8px 12px;
+  border:1px solid var(--line);border-radius:10px;
+  background:var(--panel-bg);color:var(--panel-text);
+  font:600 13px system-ui;cursor:pointer;touch-action:manipulation;
 }
-.locked-selection-hint{font-size:12px;opacity:.77}
-.selection-toolbar .voice-palette{
-  position:static!important;inset:auto!important;transform:none!important;z-index:auto!important;
-  flex:1;width:100%;max-width:100%;box-sizing:border-box;min-width:0;
-  padding:0!important;background:transparent!important;border:0!important;box-shadow:none!important;
+.workspace .appearance-lock-bar .selection-lock:hover{border-color:#9e8ad7;background:color-mix(in srgb,#a99bff 10%,var(--panel-bg))}
+.workspace .appearance-lock-bar .locked-selection-hint{font-size:11px;opacity:.75;text-align:center}
+
+/* A multi-selection intentionally has NO appearance/color list.
+   Keep only a small Lock/Unlock button, so grouped locking still works. */
+.workspace .appearance-lock-bar--multiple{
+  width:auto;max-width:calc(100vw - 28px);
+  padding:5px;gap:0;background:rgba(255,255,255,.82);
+}
+.workspace-dark .appearance-lock-bar--multiple{background:rgba(39,38,49,.85)}
+.workspace .appearance-lock-bar--multiple .selection-lock{width:auto;min-height:39px}
+
+/* A single voice note gets its existing color tools in the same card.
+   Never render that palette for mixed/multiple selections. */
+.appearance-lock-bar .voice-palette{
+  position:static!important;inset:auto!important;transform:none!important;
+  z-index:auto!important;width:100%!important;max-width:100%;
+  box-sizing:border-box;min-width:0;
+  padding:7px 0 0!important;background:transparent!important;
+  border:0!important;border-top:1px solid var(--line)!important;
+  border-radius:0!important;box-shadow:none!important;
   backdrop-filter:none!important;white-space:normal;
 }
-.selection-toolbar .voice-palette :is(button,input){min-height:36px}
-.selection-toolbar .voice-palette-swatches{flex-wrap:wrap}
-.selection-toolbar .voice-palette .voice-swatch{width:32px;min-width:32px;height:36px;flex-basis:32px}
-.selection-toolbar .voice-palette .voice-hex-form input{max-width:120px}
-/* Prevent Excalidraw's second properties strip from appearing on unlock.
-   The native canvas toolbar and custom Lock/Unlock remain intact. */
-.workspace:has(.selection-toolbar) .board .excalidraw .App-menu_left{display:none!important}
+.appearance-lock-bar .voice-palette :is(button,input){min-height:35px}
+.appearance-lock-bar .voice-palette-swatches{flex-wrap:wrap}
+.appearance-lock-bar .voice-palette .voice-swatch{width:31px;min-width:31px;height:35px;flex-basis:31px}
+.appearance-lock-bar .voice-palette .voice-hex-form input{max-width:108px}
+
+/* Only one UNLOCKED regular item may display Excalidraw's native
+   appearance/color controls. Multiple selections and unselected board do not. */
+.workspace .board:not(.board-single-selected) .excalidraw .App-menu_left,
+.workspace .board.board-locked-selected .excalidraw .App-menu_left,
+.workspace .board.board-media-selected .excalidraw .App-menu_left{
+  display:none!important;
+}
+/* Shift the original Excalidraw color/properties menu directly below the
+   lock control, visually grouping both in the left appearance area. */
+.workspace .board.board-single-selected:not(.board-locked-selected):not(.board-media-selected) .excalidraw .App-menu_left{
+  margin-top:64px!important;
+}
 /* Use the dedicated Lock / Unlock control in the selection toolbar only.
    Excalidraw's duplicated context-menu lock option is hidden. */
 .context-menu li[data-testid="toggleElementLock"],
@@ -178,7 +218,7 @@ body:has(.board.board-locked-selected) .context-menu{display:none!important}
   .workspace-toolbox-trigger{min-width:43px;min-height:43px;padding:8px 10px}
   .workspace-toolbox-label{display:none}
   .workspace-toolbox .workspace-toolbar{width:min(334px,calc(100vw - 18px));max-height:calc(100dvh - 75px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
-  .workspace .selection-toolbar{top:calc(72px + env(safe-area-inset-top));left:calc(8px + env(safe-area-inset-left));max-width:calc(100vw - 16px);padding:9px 10px}
+  .workspace .appearance-lock-bar{top:calc(67px + env(safe-area-inset-top));left:calc(9px + env(safe-area-inset-left));max-width:calc(100vw - 18px)}
   .workspace-toolbar .sticker-grid{max-height:33dvh}
 }
 @media(prefers-reduced-motion:reduce){

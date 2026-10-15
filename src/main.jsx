@@ -206,7 +206,10 @@ function App() {
       if(asFavorite) {
         const fav=await fetch("/api/sticker-favorites",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:data.id})});
         if(fav.ok)setFavoriteIds(old=>[...old,data.id]);
-      }else await placeSticker({id:data.id});
+      }else {
+        const added=await placeSticker({id:data.id});
+        if(!added)throw Error("Sticker could not be added to the board");
+      }
     }catch(e){setStickerError(e.message)}
   }
   async function loadStickers() {
@@ -257,8 +260,27 @@ function App() {
       const r=await fetch("/api/sticker-file?id="+encodeURIComponent(id));
       if(!r.ok)throw Error("Image unavailable");
       const blob=await r.blob();
-      const dataURL=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(blob)});
-      apiRef.current?.addFiles([{id:fileId,dataURL,mimeType:blob.type||"image/png",created:Date.now(),lastRetrieved:Date.now()}]);
+      const source=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(blob)});
+      // Excalidraw canvas images do not reliably accept GIF binaries.
+      // Use a PNG frame for native selection/rotation/resize, with the GIF animated above it.
+      let dataURL=source,mimeType=blob.type||"image/png";
+      if(mimeType==="image/gif"){
+        dataURL=await new Promise((resolve,reject)=>{
+          const image=new Image();
+          image.onload=()=>{
+            try{
+              const canvas=document.createElement("canvas");
+              canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;
+              canvas.getContext("2d").drawImage(image,0,0);
+              resolve(canvas.toDataURL("image/png"));
+            }catch(e){reject(e)}
+          };
+          image.onerror=()=>reject(Error("GIF preview could not be decoded"));
+          image.src=source;
+        });
+        mimeType="image/png";
+      }
+      apiRef.current?.addFiles([{id:fileId,dataURL,mimeType,created:Date.now(),lastRetrieved:Date.now()}]);
     })();
     imageLoads.current.set(fileId,task);
     try{await task}finally{imageLoads.current.delete(fileId)}
@@ -272,6 +294,7 @@ function App() {
     const y=legacy?.y??(window.innerHeight/2)/zoom-(state.scrollY||0)-75;
     const width=legacy?.width||150;
     const files=api.getFiles(),data=files[fileId];
+    if(!data?.dataURL){setStickerError("Image data was not loaded");return null}
     const dimensions=await new Promise(resolve=>{
       const image=new Image();image.onload=()=>resolve({w:image.naturalWidth||150,h:image.naturalHeight||150});image.onerror=()=>resolve({w:150,h:150});image.src=data.dataURL;
     });

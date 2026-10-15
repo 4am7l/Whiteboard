@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "Our Whiteboard",
+  "short_name": "Whiteboard",
+  "description": "Our shared drawing board",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#faf7ff",
+  "theme_color": "#faf7ff",
+  "icons": [
+    {
+      "src": "/whiteboard-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

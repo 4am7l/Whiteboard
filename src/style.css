@@ -343,18 +343,3 @@ html, body, #root { margin: 0; width: 100%; height: 100%; }
 .board .excalidraw .layer-ui__wrapper .App-menu_top,
 .board .excalidraw .layer-ui__wrapper .App-toolbar,
 .board .excalidraw .layer-ui__wrapper .App-toolbar-container{pointer-events:auto!important}
-
-/* All controls and menus are in the UI layer, above every canvas attachment. */
-.board{isolation:isolate}
-.board .board-pattern{z-index:1!important}
-.board .animated-stickers,
-.board .placed-stickers,
-.board .voice-overlay,
-.board .music-overlay{z-index:10!important}
-.board .excalidraw{position:relative;z-index:20!important;isolation:auto!important}
-.board .excalidraw .excalidraw__canvas{z-index:0!important}
-.board .excalidraw .layer-ui__wrapper{z-index:200!important;pointer-events:none!important}
-.board .excalidraw .layer-ui__wrapper :is(button,input,textarea,select,a,[role="button"],[role="toolbar"],.App-menu_top,.App-menu_bottom,.App-toolbar,.sidebar,.sidebar__container,.dropdown-menu,.dropdown-menu-container,.popover,.Island){pointer-events:auto}
-.board :is(.music-controls,.voice-controls,.pattern-controls,.sticker-controls,.theme-toggle){z-index:300!important}
-.board :is(.music-panel,.pattern-menu,.sticker-library,.sticker-library-inline){z-index:310!important}
-.board .excalidraw :is(.App-menu_top,.App-menu_bottom,.App-toolbar,.App-toolbar-container,.default-sidebar-trigger,.sidebar,.sidebar__container,.dropdown-menu,.dropdown-menu-container,.popover,.Island){z-index:250!important}

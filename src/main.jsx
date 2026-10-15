@@ -131,53 +131,6 @@ function App() {
   const known = useRef(new Map());
   const apiRef = useRef(null);
   apiRef.current = api;
-  const liveSocket = useRef(null);
-  const liveSent = useRef(new Map());
-  const liveLast = useRef(0);
-  useEffect(() => {
-    if (!authorized || !api) return;
-    let active = true, ws, retry;
-    async function connect() {
-      try {
-        const response = await fetch("/api/live-ticket", {cache:"no-store"});
-        if (!response.ok) return;
-        const {url} = await response.json();
-        if (!active) return;
-        ws = new WebSocket(url);
-        liveSocket.current = ws;
-        ws.onmessage = event => {
-          if (!loaded.current || !active) return;
-          let msg; try { msg = JSON.parse(event.data); } catch { return; }
-          if (msg.type !== "elements" || !Array.isArray(msg.elements)) return;
-          const merged = new Map(apiRef.current.getSceneElementsIncludingDeleted().map(e=>[e.id,e]));
-          let changed = false;
-          for (const e of msg.elements) {
-            if (!e || typeof e.id !== "string" || !Number.isInteger(e.version) || pending.current.has(e.id)) continue;
-            const old = merged.get(e.id);
-            if (!old || e.version > old.version || (e.version === old.version && e.versionNonce !== old.versionNonce)) {
-              merged.set(e.id,e);
-              known.current.set(e.id,Math.max(known.current.get(e.id)??-1,e.version));
-              if (e.type === "image" && !e.isDeleted && e.fileId) {
-                const id=e.fileId;
-                Promise.resolve(String(id).startsWith("sticker:")?loadImageFile(id):restoreBoardImage(id)).catch(()=>{});
-              }
-              changed=true;
-            }
-          }
-          if (changed) {
-            applying.current=true;
-            apiRef.current.updateScene({elements:[...merged.values()]});
-            queueMicrotask(()=>{applying.current=false});
-          }
-        };
-        ws.onclose=()=>{if(liveSocket.current===ws)liveSocket.current=null;if(active)retry=setTimeout(connect,3000)};
-        ws.onerror=()=>ws.close();
-      } catch {if(active)retry=setTimeout(connect,5000)}
-    }
-    connect();
-    return ()=>{active=false;clearTimeout(retry);liveSocket.current=null;ws?.close()};
-  },[api,authorized]);
-
 
   useEffect(() => {
     fetch("/api/board", { cache: "no-store" }).then(r => { if (r.ok) setAuthorized(true); }).catch(() => {});
@@ -708,19 +661,6 @@ function App() {
       if ((element.version ?? 0) > (known.current.get(element.id) ?? -1)) {
         known.current.set(element.id, element.version ?? 0);
         pending.current.set(element.id, element);
-      }
-    }
-    const ws=liveSocket.current, now=Date.now();
-    // Only transmit changed elements while actively editing; cap bandwidth and messages.
-    if (ws?.readyState===WebSocket.OPEN && ws.bufferedAmount<65536 && now-liveLast.current>=150) {
-      const changes=elements.filter(e=>liveSent.current.get(e.id)!==e.version+":"+e.versionNonce).slice(0,20);
-      if(changes.length) {
-        const payload=JSON.stringify({type:"elements",elements:changes});
-        if(payload.length<64000) {
-          ws.send(payload);
-          changes.forEach(e=>liveSent.current.set(e.id,e.version+":"+e.versionNonce));
-          liveLast.current=now;
-        }
       }
     }
   }

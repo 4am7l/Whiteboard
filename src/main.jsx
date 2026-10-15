@@ -39,6 +39,8 @@ function parseMusicLink(raw){
 }
 function MusicCard({element,theme,viewport}){
   const music=element.customData.music;
+  const savedAccent=element.customData?.musicColor;
+  const accent=typeof savedAccent==="string"&&/^#[0-9a-fA-F]{6}$/.test(savedAccent)?savedAccent:null;
   const audioMode=music.displayMode==="audio";
   const [active,setActive]=useState(false),[playing,setPlaying]=useState(false),[ready,setReady]=useState(false),[elapsed,setElapsed]=useState(0),[duration,setDuration]=useState(0),[failed,setFailed]=useState(false);
   const mount=useRef(null),player=useRef(null);
@@ -67,7 +69,7 @@ function MusicCard({element,theme,viewport}){
   useEffect(()=>{if(!ready)return;const timer=setInterval(()=>{try{setElapsed(player.current?.getCurrentTime?.()||0);setDuration(player.current?.getDuration?.()||0)}catch{}},600);return()=>clearInterval(timer)},[ready]);
   const fmt=t=>Math.floor(t/60)+":"+String(Math.floor(t%60)).padStart(2,"0");
   const toggle=()=>{if(!ready)return;playing?player.current?.pauseVideo?.():player.current?.playVideo?.()};
-  return <div className={`music-card music-card-${theme} music-glass-card ${audioMode?"music-glass-audio":"music-glass-video"}`} data-music-element={element.id} style={{left:(element.x+viewport.x)*viewport.zoom+(viewport.zoom-1)*element.width/2,top:(element.y+viewport.y)*viewport.zoom+(viewport.zoom-1)*element.height/2,width:element.width,height:element.height,transform:`rotate(${element.angle||0}rad) scale(${viewport.zoom})`,transformOrigin:"center center",opacity:(element.opacity??100)/100}}>
+  return <div className={`music-card music-card-${theme} music-glass-card ${audioMode?"music-glass-audio":"music-glass-video"} ${accent?"music-glass-tinted":""}`} data-music-element={element.id} style={{...(accent?{"--music-accent":accent}:{}),left:(element.x+viewport.x)*viewport.zoom+(viewport.zoom-1)*element.width/2,top:(element.y+viewport.y)*viewport.zoom+(viewport.zoom-1)*element.height/2,width:element.width,height:element.height,transform:`rotate(${element.angle||0}rad) scale(${viewport.zoom})`,transformOrigin:"center center",opacity:(element.opacity??100)/100}}>
     {audioMode&&youtube?<><div className="music-glass-hidden" aria-hidden="true"><div ref={mount}/></div><div className="music-glass-cover">{music.thumbnail?<img src={music.thumbnail} alt="Album artwork"/>:<div className="music-glass-art">♪</div>}<button type="button" className="music-glass-cover-play" onClick={toggle} disabled={!ready||failed} aria-label={playing?"Pause":"Play"}><svg viewBox="0 0 24 24" width="19" height="19" fill="currentColor">{playing?<path d="M6 4h4v16H6zm8 0h4v16h-4z"/>:<path d="M8 4v16l12-8z"/>}</svg></button></div><div className="music-glass-body"><div className="music-glass-title" title={music.title}>{music.title||"Music"}</div><div className="music-glass-artist">{music.channel||"YouTube"}</div><input type="range" aria-label="Song progress" min="0" max={Math.max(duration,1)} value={Math.min(elapsed,duration||1)} onChange={e=>{player.current?.seekTo?.(Number(e.target.value),true);setElapsed(Number(e.target.value))}}/><div className="music-glass-times"><span>{fmt(elapsed)}</span><span>{fmt(duration)}</span></div></div><a className="music-glass-link" href={url} target="_blank" rel="noopener noreferrer" aria-label="Open original"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 4h6v6M20 4l-9 9"/><path d="M20 13v6H5V4h6"/></svg></a>{failed&&<a className="music-glass-failure" href={url} target="_blank" rel="noopener noreferrer">Open on YouTube</a>}</>
     :<><div className="music-glass-video-top"><span>{music.title||"YouTube video"}</span><a href={url} target="_blank" rel="noopener noreferrer" aria-label="Open original"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 4h6v6M20 4l-9 9"/><path d="M20 13v6H5V4h6"/></svg></a></div>{music.provider==="preview"?<div className="music-preview-player"><strong>{music.title}</strong><audio controls src={music.previewUrl}/></div>:active?<iframe title="Song player" src={embed} allow="autoplay;encrypted-media;fullscreen;picture-in-picture" allowFullScreen referrerPolicy="strict-origin-when-cross-origin"/>:<button type="button" className="music-glass-video-poster" onClick={()=>setActive(true)} style={music.thumbnail?{backgroundImage:`linear-gradient(#0002,#0005),url("${music.thumbnail}")`}:undefined}><span className="music-glass-video-play"><svg viewBox="0 0 24 24" width="25" height="25" fill="currentColor"><path d="M8 4v16l12-8z"/></svg></span></button>}</>}
   </div>;
@@ -130,6 +132,8 @@ function App() {
   const [musicBusy,setMusicBusy]=useState(false);
   const [musicError,setMusicError]=useState("");
   const [selectedVoiceId,setSelectedVoiceId]=useState(null);
+  const [selectedMusicId,setSelectedMusicId]=useState(null);
+  const [musicHex,setMusicHex]=useState("");
   const [selectedBoardIds,setSelectedBoardIds]=useState([]);
   const [penActive,setPenActive]=useState(false);
   const [selectionLocked,setSelectionLocked]=useState(false);
@@ -709,6 +713,30 @@ function App() {
     const changed=next.find(e=>e.id===selectedVoiceId);if(changed){pending.current.set(changed.id,changed);known.current.set(changed.id,changed.version)}
   }
 
+  function setMusicColor(color){
+    const editor=apiRef.current;
+    if(!editor||!selectedMusicId)return;
+    if(color!=="default"&&!/^#[0-9a-fA-F]{6}$/.test(color))return;
+    const selection=editor.getAppState()?.selectedElementIds||{};
+    if(Object.keys(selection).filter(id=>selection[id]).length!==1||!selection[selectedMusicId])return;
+    const elements=editor.getSceneElementsIncludingDeleted();
+    const current=elements.find(e=>e.id===selectedMusicId);
+    if(!current||current.isDeleted||current.locked||!current.customData?.music?.id)return;
+    if((current.customData.musicColor||"default")===color)return;
+    const changed={...current,customData:{...current.customData,musicColor:color},
+      version:(current.version||0)+1,versionNonce:Math.floor(Math.random()*2147483647),updated:Date.now()};
+    editor.updateScene({elements:elements.map(e=>e.id===changed.id?changed:e)});
+    pending.current.set(changed.id,changed);
+    known.current.set(changed.id,changed.version);
+  }
+
+  useEffect(()=>{
+    if(!selectedMusicId){setMusicHex("");return}
+    const item=apiRef.current?.getSceneElementsIncludingDeleted?.().find(e=>e.id===selectedMusicId);
+    const saved=item?.customData?.musicColor;
+    setMusicHex(typeof saved==="string"&&/^#[0-9a-fA-F]{6}$/.test(saved)?saved:"");
+  },[selectedMusicId]);
+
   function addMusicCard(link,title="",displayMode="video",thumbnail="",channel=""){
     const music=typeof link==="object"&&link?.provider==="preview"?link:parseMusicLink(link);
     if(!music){setMusicError("Paste a YouTube video or Spotify track link");return}
@@ -880,6 +908,8 @@ function App() {
       document.querySelector(".board")?.classList.toggle("board-media-selected",Boolean(mediaOnly));
       const selected=elements.find(e=>e.customData?.voiceNoteId&&appState.selectedElementIds?.[e.id]);
       setSelectedVoiceId(old=>old===(selected?.id||null)?old:(selected?.id||null));
+      const selectedMusic=selectedIds.length===1?elements.find(e=>!e.isDeleted&&e.customData?.music?.id&&appState.selectedElementIds?.[e.id]):null;
+      setSelectedMusicId(old=>old===(selectedMusic?.id||null)?old:(selectedMusic?.id||null));
       const next = { zoom: appState.zoom?.value || 1, x: appState.scrollX || 0, y: appState.scrollY || 0 };
       setViewport(old => old.zoom === next.zoom && old.x === next.x && old.y === next.y ? old : next);
     }
@@ -939,6 +969,17 @@ function App() {
     <button type="button" className="board-logout-bottom" onClick={logout} title="Return to password screen" aria-label="Log out">Log out</button>
     {stickerError&&<div className="sticker-global-error" role="alert">{stickerError}<button type="button" onClick={()=>setStickerError("")}>×</button></div>}
     {selectedBoardIds.length>0&&<div className={`appearance-lock-bar ${selectedBoardIds.length>1?"appearance-lock-bar--multiple":""}`} aria-label="Selected element controls"><button type="button" className="selection-lock" onClick={toggleSelectedLock} aria-label={selectionLocked?"Unlock selected items":"Lock selected items"}><span aria-hidden="true">{selectionLocked?"🔓":"🔒"}</span> {selectionLocked?"Unlock":"Lock"}{selectedBoardIds.length>1?` (${selectedBoardIds.length})`:""}</button>{selectionLocked&&selectedBoardIds.length===1&&<span className="locked-selection-hint">Locked · selection only</span>}{selectedBoardIds.length===1&&selectedVoiceId&&!selectionLocked&&<div className={`voice-palette voice-palette-${theme}`} aria-label="Voice note appearance"><span>Voice color</span><div className="voice-palette-swatches">{[["default","Auto"],["violet","Purple"],["blue","Blue"],["rose","Pink"],["mint","Mint"]].map(([value,label])=><button key={value} type="button" className={"voice-swatch voice-swatch-"+value} title={label} aria-label={label} onClick={()=>{setVoiceHex("");setVoiceColor(value)}}>{value==="default"?"◐":""}</button>)}</div><label className="voice-custom-picker" title="Pick a custom color">✎ <input aria-label="Pick any color" type="color" value={/^#[0-9a-fA-F]{6}$/.test(voiceHex)?voiceHex:"#9274db"} onChange={e=>{setVoiceHex(e.target.value);setVoiceColor(e.target.value)}}/></label><form className="voice-hex-form" onSubmit={e=>{e.preventDefault();if(/^#[0-9a-fA-F]{6}$/.test(voiceHex))setVoiceColor(voiceHex)}}><input aria-label="Hex color" placeholder="#9274DB" maxLength={7} value={voiceHex} onChange={e=>setVoiceHex(e.target.value)} /><button type="submit" disabled={!/^#[0-9a-fA-F]{6}$/.test(voiceHex)}>Apply</button></form></div>}
+    {selectedBoardIds.length===1&&selectedMusicId&&!selectionLocked&&<div className={`voice-palette music-palette voice-palette-${theme}`} aria-label="Music and video appearance">
+      <span>Music / video color</span>
+      <div className="voice-palette-swatches">
+        {[[ "default","Original",null],["#9274db","Purple","#9274db"],["#5394e8","Blue","#5394e8"],["#e078a7","Pink","#e078a7"],["#3eac98","Mint","#3eac98"],["#d99a44","Amber","#d99a44"]].map(([value,label,tone])=><button key={value} type="button" className={`voice-swatch music-color-swatch ${value==="default"?"music-color-original":""}`} style={tone?{backgroundColor:tone}:undefined} title={label} aria-label={label} onClick={()=>{setMusicHex(tone||"");setMusicColor(value)}}>{value==="default"?"◐":""}</button>)}
+      </div>
+      <label className="voice-custom-picker" title="Pick a custom card color">Custom color <input aria-label="Choose music or video color" type="color" value={/^#[0-9a-fA-F]{6}$/.test(musicHex)?musicHex:"#9274db"} onChange={e=>{setMusicHex(e.target.value);setMusicColor(e.target.value)}}/></label>
+      <form className="voice-hex-form" onSubmit={e=>{e.preventDefault();if(/^#[0-9a-fA-F]{6}$/.test(musicHex))setMusicColor(musicHex)}}>
+        <input aria-label="Music or video HEX color" placeholder="#9274DB" maxLength={7} value={musicHex} onChange={e=>setMusicHex(e.target.value)}/>
+        <button type="submit" disabled={!/^#[0-9a-fA-F]{6}$/.test(musicHex)}>Apply</button>
+      </form>
+    </div>}
 </div>}
     <div className={`board ${selectedVoiceId?"board-voice-selected":""} ${selectionLocked?"board-locked-selected":""} ${selectedBoardIds.length===1?"board-single-selected":""} ${selectedBoardIds.length>1?"board-multi-selected":""} ${penActive?"board-pen-active":""}`}>
     <Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} name="Our Whiteboard" />

@@ -10,7 +10,7 @@ export async function onRequestPost({ request, env }) {
   if (!env.DB) return Response.json({ error: "D1 binding DB missing" }, { status: 503 });
   let body;
   try { body = await request.json(); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
-  if (!Array.isArray(body.elements) || body.elements.length > 500 || JSON.stringify(body).length > 2000000) {
+  if (!Array.isArray(body.elements) || body.elements.length > 2000 || JSON.stringify(body).length > 20000000) {
     return Response.json({ error: "Invalid or oversized payload" }, { status: 400 });
   }
   const statements = [];

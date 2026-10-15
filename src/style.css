@@ -243,3 +243,9 @@ html, body, #root { margin: 0; width: 100%; height: 100%; }
 .voice-player .voice-time{font:500 10px ui-monospace,monospace;white-space:nowrap;opacity:.8}
 .voice-card audio{display:none}
 @media(max-width:520px){.voice-palette{right:8px;bottom:8px;gap:6px;padding:9px}}
+
+/* Hide the empty Excalidraw properties container entirely for selected voice notes. */
+.board-voice-selected .App-menu__left,
+.board-voice-selected .App-menu__left__content,
+.board-voice-selected .App-menu__left .Island,
+.board-voice-selected .App-menu__left .properties-panel{display:none!important}

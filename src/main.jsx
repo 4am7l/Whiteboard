@@ -182,8 +182,7 @@ function App() {
     setSearchBusy(true);setStickerError("");
     try {
       const r=await fetch("/api/sticker-search?q="+encodeURIComponent(searchQuery)+"&kind="+searchKind+"&source="+searchSource);
-      const data=await r.json();
-      if(!r.ok)throw Error(data.error||"Search failed");
+      const data=await readApiJson(r,"/api/sticker-search");
       setSearchItems(data.items);
     }catch(e){setStickerError(e.message)}
     finally{setSearchBusy(false)}
@@ -196,13 +195,23 @@ function App() {
       setFavoriteIds(old=>saved?old.filter(x=>x!==id):[...old,id]);
     }catch(e){setStickerError(e.message)}
   }
+  async function readApiJson(response,endpoint){
+    const type=response.headers.get("content-type")||"";
+    const body=await response.text();
+    if(!type.includes("application/json")){
+      throw Error(endpoint+" returned "+response.status+" "+(type||"unknown content type")+". Cloudflare may be serving HTML instead of the API. Check Pages Functions deployment.");
+    }
+    let data;
+    try{data=JSON.parse(body)}catch{throw Error(endpoint+" returned invalid JSON (HTTP "+response.status+")")}
+    if(!response.ok)throw Error(endpoint+" HTTP "+response.status+": "+(data.error||"Request failed"));
+    return data;
+  }
   async function importSticker(item,asFavorite=false) {
     setStickerError("");
     try {
       if(!apiRef.current)throw Error("Board is not ready yet");
       const r=await fetch("/api/sticker-import",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:item.url,name:item.title})});
-      const data=await r.json();
-      if(!r.ok)throw Error(data.error||"Import failed");
+      const data=await readApiJson(r,"/api/sticker-import");
       await loadStickers();
       if(asFavorite) {
         const fav=await fetch("/api/sticker-favorites",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:data.id})});

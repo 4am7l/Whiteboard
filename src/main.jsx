@@ -36,23 +36,18 @@ function parseMusicLink(raw){
     if(h==="open.spotify.com"){const parts=u.pathname.split("/").filter(Boolean);const index=parts[0]?.startsWith("intl-")?1:0;return parts[index]==="track"&&/^[a-zA-Z0-9]{22}$/.test(parts[index+1]||"")?{provider:"spotify",id:parts[index+1]}:null}
   }catch{}return null;
 }
-function MusicCard({element,theme,viewport,onMove}){
+function MusicCard({element,theme,viewport,onMove,onResize}){
   const music=element.customData.music;
-  const [mode,setMode]=useState("audio");
-  const [playing,setPlaying]=useState(false);
-  const [ready,setReady]=useState(false);
-  const [position,setPosition]=useState(0);
-  const [duration,setDuration]=useState(0);
-  const [volume,setVolume]=useState(80);
-  const frame=useRef(null),player=useRef(null),drag=useRef(null);
+  const [mode,setMode]=useState("audio"),[playing,setPlaying]=useState(false),[ready,setReady]=useState(false),[position,setPosition]=useState(0),[duration,setDuration]=useState(0),[volume,setVolume]=useState(80);
+  const frame=useRef(null),player=useRef(null),gesture=useRef(null);
   const youtube=music.provider==="youtube";
   useEffect(()=>{
     if(!youtube)return;
     let cancelled=false;
     const init=()=>{
       if(cancelled||!frame.current||!window.YT?.Player)return;
-      const p=new window.YT.Player(frame.current,{videoId:music.id,playerVars:{playsinline:1,rel:0,controls:mode==="video"?1:0},events:{
-        onReady:e=>{if(cancelled)return;player.current=e.target;setReady(true);e.target.setVolume(volume)},
+      const p=new window.YT.Player(frame.current,{videoId:music.id,playerVars:{playsinline:1,rel:0,controls:0,disablekb:1},events:{
+        onReady:e=>{if(cancelled)return;player.current=e.target;setReady(true);e.target.setVolume(80)},
         onStateChange:e=>{if(!cancelled)setPlaying(e.data===window.YT.PlayerState.PLAYING)}
       }});
       player.current=p;
@@ -61,28 +56,25 @@ function MusicCard({element,theme,viewport,onMove}){
     else{
       const previous=window.onYouTubeIframeAPIReady;
       window.onYouTubeIframeAPIReady=()=>{previous?.();init()};
-      if(!document.querySelector('script[data-youtube-iframe-api]')){
-        const script=document.createElement("script");script.src="https://www.youtube.com/iframe_api";script.dataset.youtubeIframeApi="1";document.head.appendChild(script);
-      }
+      if(!document.querySelector('script[data-youtube-iframe-api]')){const script=document.createElement("script");script.src="https://www.youtube.com/iframe_api";script.dataset.youtubeIframeApi="1";document.head.appendChild(script)}
     }
-    return()=>{cancelled=true;try{player.current?.destroy?.()}catch{}player.current=null;setReady(false)};
-  },[music.id,youtube,mode]);
-  useEffect(()=>{
-    if(!youtube||!ready)return;
-    const interval=setInterval(()=>{try{setPosition(player.current?.getCurrentTime?.()||0);setDuration(player.current?.getDuration?.()||0)}catch{}},500);
-    return()=>clearInterval(interval);
-  },[youtube,ready]);
-  const format=t=>Math.floor(t/60)+":"+String(Math.floor(t%60)).padStart(2,"0");
+    return()=>{cancelled=true;try{player.current?.destroy?.()}catch{}player.current=null};
+  },[music.id,youtube]);
+  useEffect(()=>{if(!youtube||!ready)return;const timer=setInterval(()=>{try{setPosition(player.current?.getCurrentTime?.()||0);setDuration(player.current?.getDuration?.()||0)}catch{}},500);return()=>clearInterval(timer)},[youtube,ready]);
+  const fmt=t=>Number.isFinite(t)?Math.floor(t/60)+":"+String(Math.floor(t%60)).padStart(2,"0"):"0:00";
   const toggle=()=>{if(!ready)return;playing?player.current.pauseVideo():player.current.playVideo()};
-  const startDrag=e=>{if(e.button!==0||e.target.closest("button,a,input"))return;e.preventDefault();drag.current={x:e.clientX,y:e.clientY,ox:element.x,oy:element.y};e.currentTarget.setPointerCapture(e.pointerId)};
-  const finishDrag=e=>{if(!drag.current)return;const d=drag.current;drag.current=null;onMove(element.id,d.ox+(e.clientX-d.x)/viewport.zoom,d.oy+(e.clientY-d.y)/viewport.zoom)};
+  const begin=e=>{if(e.button!==0||e.target.closest("button,a,input,iframe,.music-video-stage"))return;e.preventDefault();e.stopPropagation();gesture.current={kind:"move",x:e.clientX,y:e.clientY,ox:element.x,oy:element.y};e.currentTarget.setPointerCapture(e.pointerId)};
+  const end=e=>{const g=gesture.current;if(!g)return;gesture.current=null;if(g.kind==="move")onMove(element.id,g.ox+(e.clientX-g.x)/viewport.zoom,g.oy+(e.clientY-g.y)/viewport.zoom)};
+  const resizeStart=e=>{e.stopPropagation();e.preventDefault();gesture.current={kind:"resize",x:e.clientX,y:e.clientY,w:element.width,h:element.height};e.currentTarget.setPointerCapture(e.pointerId)};
+  const resizeEnd=e=>{const g=gesture.current;if(!g||g.kind!=="resize")return;gesture.current=null;onResize(element.id,Math.max(260,g.w+(e.clientX-g.x)/viewport.zoom),Math.max(190,g.h+(e.clientY-g.y)/viewport.zoom))};
   const url=youtube?"https://www.youtube.com/watch?v="+music.id:music.provider==="spotify"?"https://open.spotify.com/track/"+music.id:music.url;
-  return <div className={"music-card music-card-"+theme+" music-card-"+mode} data-music-element={element.id} style={{left:(element.x+viewport.x)*viewport.zoom,top:(element.y+viewport.y)*viewport.zoom,width:element.width*viewport.zoom,height:element.height*viewport.zoom,transform:`rotate(${element.angle||0}rad)`,opacity:(element.opacity??100)/100}}>
-    <div className="music-card-head music-drag-handle" onPointerDown={startDrag} onPointerUp={finishDrag} onPointerCancel={()=>drag.current=null} title="Drag to move card"><span>♫ {music.title||"Music"}</span><a href={url} target="_blank" rel="noopener noreferrer" title="Open original">↗</a></div>
-    {youtube?<><div className={"music-video-area "+(mode==="audio"?"music-video-hidden":"")}><div ref={frame}/></div>
-      <div className="music-native-controls"><div className="music-mode-buttons"><button type="button" className={mode==="audio"?"active":""} onClick={()=>setMode("audio")}>♫ Song</button><button type="button" className={mode==="video"?"active":""} onClick={()=>setMode("video")}>▣ Video</button></div>
-      {mode==="audio"&&<><div className="music-album-art">♫</div><button type="button" className="music-play" onClick={toggle} disabled={!ready}>{playing?"❚❚":"▶"}</button><input aria-label="Song progress" type="range" min="0" max={Math.max(duration,1)} step="1" value={Math.min(position,duration||1)} onChange={e=>{player.current?.seekTo(Number(e.target.value),true);setPosition(Number(e.target.value))}}/><div className="music-time">{format(position)} / {format(duration)}</div><label className="music-volume">Volume <input aria-label="Music volume" type="range" min="0" max="100" value={volume} onChange={e=>{setVolume(Number(e.target.value));player.current?.setVolume?.(Number(e.target.value))}}/></label></>}
-      </div></>:music.provider==="preview"?<div className="music-preview-player"><strong>{music.title}</strong><audio controls src={music.previewUrl}/></div>:<iframe title="Spotify player" src={"https://open.spotify.com/embed/track/"+music.id} allow="autoplay;encrypted-media;fullscreen;picture-in-picture"/>}
+  return <div className={`music-card music-card-${theme} music-card-${mode} music-card-modern`} data-music-element={element.id} onPointerDown={begin} onPointerUp={end} onPointerCancel={()=>gesture.current=null} style={{left:(element.x+viewport.x)*viewport.zoom,top:(element.y+viewport.y)*viewport.zoom,width:element.width*viewport.zoom,height:element.height*viewport.zoom,transform:`rotate(${element.angle||0}rad)`,opacity:(element.opacity??100)/100}}>
+    <div className="music-modern-top"><span className="music-modern-grip">⠿</span><span className="music-modern-label">NOW PLAYING</span><div className="music-modern-modes"><button type="button" className={mode==="audio"?"selected":""} onClick={()=>setMode("audio")}>♫ Song</button><button type="button" className={mode==="video"?"selected":""} onClick={()=>setMode("video")}>▣ Video</button></div><a href={url} target="_blank" rel="noopener noreferrer" title="Open source">↗</a></div>
+    {youtube?<><div className={`music-video-stage ${mode==="audio"?"music-video-off":""}`}><div ref={frame}/>{mode==="video"&&<button className="music-video-cover" onClick={toggle} aria-label={playing?"Pause":"Play"}>{playing?"Ⅱ":"▶"}</button>}</div>
+      {mode==="audio"&&<div className="music-modern-song"><div className="music-modern-cover">{music.thumbnail?<img src={music.thumbnail} alt="Album artwork"/>:<span>♫</span>}</div><div className="music-modern-title" title={music.title}>{music.title||"Your song"}</div><div className="music-modern-artist">{music.channel||"Music"}</div><div className="music-modern-wave">{Array.from({length:37},(_,i)=><i key={i} style={{height:(6+Math.abs(Math.sin(i*1.7)*Math.cos(i*.53))*22)+"px",opacity:i/37<position/(duration||1)?1:.42}}/>)}</div></div>}
+      <div className="music-modern-bottom"><input aria-label="Seek" type="range" min="0" max={Math.max(duration,1)} step="1" value={Math.min(position,duration||1)} onChange={e=>{player.current?.seekTo(Number(e.target.value),true);setPosition(Number(e.target.value))}}/><div className="music-modern-times"><span>{fmt(position)}</span><span>{fmt(duration)}</span></div><div className="music-modern-actions"><label title="Volume">◖ <input aria-label="Volume" type="range" min="0" max="100" value={volume} onChange={e=>{setVolume(Number(e.target.value));player.current?.setVolume?.(Number(e.target.value))}}/></label><button className="music-modern-play" type="button" disabled={!ready} onClick={toggle}>{playing?"Ⅱ":"▶"}</button><button type="button" title="Restart" onClick={()=>player.current?.seekTo(0,true)}>↺</button></div></div>
+    </>:<div className="music-modern-external"><div className="music-modern-title">{music.title||"Music"}</div><iframe title="Music player" src={music.provider==="spotify"?"https://open.spotify.com/embed/track/"+music.id:music.url} allow="autoplay;encrypted-media;fullscreen;picture-in-picture"/></div>}
+    <div className="music-modern-resize" title="Drag to resize" onPointerDown={resizeStart} onPointerUp={resizeEnd} onPointerCancel={()=>gesture.current=null}>◢</div>
   </div>;
 }
 
@@ -429,13 +421,18 @@ function App() {
     editor.updateScene({elements:next});
     const changed=next.find(e=>e.id===id);if(changed){pending.current.set(id,changed);known.current.set(id,changed.version);setMusicCards(old=>old.map(e=>e.id===id?changed:e))}
   }
-  function addMusicCard(link,title=""){
+  function resizeMusicCard(id,width,height){
+    const editor=apiRef.current;if(!editor)return;
+    const next=editor.getSceneElementsIncludingDeleted().map(e=>e.id===id?{...e,width,height,version:(e.version||0)+1,versionNonce:Math.floor(Math.random()*2147483647),updated:Date.now()}:e);
+    editor.updateScene({elements:next});const changed=next.find(e=>e.id===id);if(changed){pending.current.set(id,changed);known.current.set(id,changed.version);setMusicCards(old=>old.map(e=>e.id===id?changed:e))}
+  }
+  function addMusicCard(link,title="",thumbnail="",channel=""){
     const music=typeof link==="object"&&link?.provider==="preview"?link:parseMusicLink(link);
     if(!music){setMusicError("Paste a YouTube video or Spotify track link");return}
     const editor=apiRef.current;if(!editor){setMusicError("Board editor is not ready");return}
-    const state=editor.getAppState(),zoom=state.zoom?.value||1,width=300,height=190;
+    const state=editor.getAppState(),zoom=state.zoom?.value||1,width=340,height=300;
     const id=crypto.randomUUID();
-    const element={id,type:"rectangle",x:(window.innerWidth/2)/zoom-(state.scrollX||0)-width/2,y:(window.innerHeight/2)/zoom-(state.scrollY||0)-height/2,width,height,angle:0,strokeColor:"transparent",backgroundColor:"transparent",fillStyle:"solid",strokeWidth:2,strokeStyle:"solid",roughness:0,opacity:100,groupIds:[],frameId:null,roundness:{type:3},seed:Math.floor(Math.random()*2147483647),version:1,versionNonce:Math.floor(Math.random()*2147483647),isDeleted:false,boundElements:null,updated:Date.now(),link:null,locked:false,customData:{music:{...music,title}}};
+    const element={id,type:"rectangle",x:(window.innerWidth/2)/zoom-(state.scrollX||0)-width/2,y:(window.innerHeight/2)/zoom-(state.scrollY||0)-height/2,width,height,angle:0,strokeColor:"transparent",backgroundColor:"transparent",fillStyle:"solid",strokeWidth:2,strokeStyle:"solid",roughness:0,opacity:100,groupIds:[],frameId:null,roundness:{type:3},seed:Math.floor(Math.random()*2147483647),version:1,versionNonce:Math.floor(Math.random()*2147483647),isDeleted:false,boundElements:null,updated:Date.now(),link:null,locked:false,customData:{music:{...music,title,thumbnail,channel}}};
     editor.updateScene({elements:[...editor.getSceneElementsIncludingDeleted(),element],appState:{selectedElementIds:{[id]:true}}});
     pending.current.set(id,element);known.current.set(id,1);setMusicCards(old=>[...old,element]);setMusicOpen(false);setMusicError("");
   }
@@ -554,7 +551,7 @@ function App() {
   }
 
   if (!authorized) return <form className="login" onSubmit={login}><h1>Our Whiteboard ♡</h1><p>Enter our 6-digit code</p><input aria-label="6-digit code" type="password" inputMode="numeric" autoComplete="off" maxLength={6} pattern="[0-9]{6}" required value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ""))}/><button type="submit">Open board</button><p role="alert">{loginError}</p></form>;
-  return <main className={`board ${selectedVoiceId?"board-voice-selected":""}`}><div className="music-controls"><button type="button" onClick={()=>setMusicOpen(v=>!v)}>♫ Music</button>{musicOpen&&<section className={"music-panel music-panel-"+theme}><form onSubmit={searchMusic}><input aria-label="Song name or link" placeholder="Song name or YouTube / Spotify URL" value={musicInput} onChange={e=>setMusicInput(e.target.value)}/><button type="submit" disabled={musicBusy}>{musicBusy?"Searching…":"Search / Add"}</button></form>{musicError&&<small role="alert">{musicError}</small>}<div className="music-results">{musicResults.map(item=><div key={item.id} className="music-result">{item.thumbnail&&<img src={item.thumbnail} alt=""/>}<div><strong>{item.title}</strong><small>{item.channel}</small><button type="button" onClick={()=>addMusicCard("https://www.youtube.com/watch?v="+item.id,item.title)}>＋ Add full song</button></div></div>)}</div><small>Choose a YouTube result to add its full embedded player directly to the board. Some videos restrict embedding.</small></section>}</div><div className="voice-controls"><button type="button" disabled={voiceBusy} onClick={recording?stopVoice:startVoice}>{voiceBusy?"Saving…":recording?"■ Stop voice":"🎙 Voice note"}</button>{recording&&<span className="voice-live">● Recording</span>}</div><button type="button" className={`theme-toggle ${theme==="dark"?"theme-toggle--dark":"theme-toggle--light"}`} title="Change theme" onClick={toggleTheme} aria-label="Toggle dark mode">{theme==="dark"?"☀️ Light":"🌙 Dark"}</button><div className="pattern-controls"><button type="button" className={`pattern-button ${theme==="dark"?"pattern-dark":"pattern-light"}`} onClick={()=>setPatternMenu(v=>!v)} aria-expanded={patternMenu}>▦ Background</button>{patternMenu&&<div className={`pattern-menu ${theme==="dark"?"pattern-dark":"pattern-light"}`}>{[["none","Blank"],["lines","Horizontal lines"],["squares","Small squares"],["dots","Dots"],["graph","Graph paper"]].map(([id,label])=><button type="button" key={id} className={pattern===id?"selected":""} onClick={()=>choosePattern(id)}>{label}</button>)}</div>}</div>
+  return <main className={`board ${selectedVoiceId?"board-voice-selected":""}`}><div className="music-controls"><button type="button" onClick={()=>setMusicOpen(v=>!v)}>♫ Music</button>{musicOpen&&<section className={"music-panel music-panel-"+theme}><form onSubmit={searchMusic}><input aria-label="Song name or link" placeholder="Song name or YouTube / Spotify URL" value={musicInput} onChange={e=>setMusicInput(e.target.value)}/><button type="submit" disabled={musicBusy}>{musicBusy?"Searching…":"Search / Add"}</button></form>{musicError&&<small role="alert">{musicError}</small>}<div className="music-results">{musicResults.map(item=><div key={item.id} className="music-result">{item.thumbnail&&<img src={item.thumbnail} alt=""/>}<div><strong>{item.title}</strong><small>{item.channel}</small><button type="button" onClick={()=>addMusicCard("https://www.youtube.com/watch?v="+item.id,item.title,item.thumbnail,item.channel)}>＋ Add full song</button></div></div>)}</div><small>Choose a YouTube result to add its full embedded player directly to the board. Some videos restrict embedding.</small></section>}</div><div className="voice-controls"><button type="button" disabled={voiceBusy} onClick={recording?stopVoice:startVoice}>{voiceBusy?"Saving…":recording?"■ Stop voice":"🎙 Voice note"}</button>{recording&&<span className="voice-live">● Recording</span>}</div><button type="button" className={`theme-toggle ${theme==="dark"?"theme-toggle--dark":"theme-toggle--light"}`} title="Change theme" onClick={toggleTheme} aria-label="Toggle dark mode">{theme==="dark"?"☀️ Light":"🌙 Dark"}</button><div className="pattern-controls"><button type="button" className={`pattern-button ${theme==="dark"?"pattern-dark":"pattern-light"}`} onClick={()=>setPatternMenu(v=>!v)} aria-expanded={patternMenu}>▦ Background</button>{patternMenu&&<div className={`pattern-menu ${theme==="dark"?"pattern-dark":"pattern-light"}`}>{[["none","Blank"],["lines","Horizontal lines"],["squares","Small squares"],["dots","Dots"],["graph","Graph paper"]].map(([id,label])=><button type="button" key={id} className={pattern===id?"selected":""} onClick={()=>choosePattern(id)}>{label}</button>)}</div>}</div>
     {libraryHost&&createPortal(<section className={`sticker-library-inline ${stickerMenu?"sticker-library-open":""} ${theme==="dark"?"pattern-dark":"pattern-light"}`}>
       <button type="button" className="sticker-section-toggle" onClick={()=>setStickerMenu(v=>!v)}>♡ Stickers {stickerMenu?"▴":"▾"}</button>
       {stickerMenu&&<div className="sticker-library-content">
@@ -580,7 +577,7 @@ function App() {
     {stickerError&&<div className="sticker-global-error" role="alert">{stickerError}<button type="button" onClick={()=>setStickerError("")}>×</button></div>}
     {selectedVoiceId&&<div className={`voice-palette voice-palette-${theme}`} aria-label="Voice note appearance"><span>Voice color</span><div className="voice-palette-swatches">{[["default","Auto"],["violet","Purple"],["blue","Blue"],["rose","Pink"],["mint","Mint"]].map(([value,label])=><button key={value} type="button" className={"voice-swatch voice-swatch-"+value} title={label} aria-label={label} onClick={()=>{setVoiceHex("");setVoiceColor(value)}}>{value==="default"?"◐":""}</button>)}</div><label className="voice-custom-picker" title="Pick a custom color">✎ <input aria-label="Pick any color" type="color" value={/^#[0-9a-fA-F]{6}$/.test(voiceHex)?voiceHex:"#9274db"} onChange={e=>{setVoiceHex(e.target.value);setVoiceColor(e.target.value)}}/></label><form className="voice-hex-form" onSubmit={e=>{e.preventDefault();if(/^#[0-9a-fA-F]{6}$/.test(voiceHex))setVoiceColor(voiceHex)}}><input aria-label="Hex color" placeholder="#9274DB" maxLength={7} value={voiceHex} onChange={e=>setVoiceHex(e.target.value)} /><button type="submit" disabled={!/^#[0-9a-fA-F]{6}$/.test(voiceHex)}>Apply</button></form></div>}
     <Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} name="Our Whiteboard" />
-    <div className="voice-overlay">{voiceCards.map(e=><VoiceNoteCard key={e.id} element={e} theme={theme} viewport={viewport}/>)}</div><div className="music-overlay">{musicCards.map(e=><MusicCard key={e.id} element={e} theme={theme} viewport={viewport} onMove={moveMusicCard}/>)}</div>
+    <div className="voice-overlay">{voiceCards.map(e=><VoiceNoteCard key={e.id} element={e} theme={theme} viewport={viewport}/>)}</div><div className="music-overlay">{musicCards.map(e=><MusicCard key={e.id} element={e} theme={theme} viewport={viewport} onMove={moveMusicCard} onResize={resizeMusicCard}/>)}</div>
     <div className="animated-stickers" aria-hidden="true">{sceneImages.filter(e=>e.fileId.endsWith(".gif")).map(e=>{
       const id=e.fileId.slice(8);
       const scale=e.scale||[1,1];

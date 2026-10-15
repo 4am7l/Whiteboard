@@ -17,7 +17,6 @@
 .board :is(.animated-stickers,.voice-overlay,.music-overlay,.placed-stickers){z-index:3;clip-path:none}
 .board .excalidraw .popover{z-index:20}
 .selection-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex:none;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--panel-bg);max-height:30dvh;overflow:auto}
-.selection-toolbar .board-delete-selected{position:static;transform:none;z-index:auto;min-height:44px;box-shadow:none;flex:none;margin:0}
 .selection-toolbar .voice-palette{position:static;inset:auto;transform:none;z-index:auto;flex:1;width:auto;max-width:100%;padding:0;background:transparent;border:0!important;box-shadow:none;backdrop-filter:none;white-space:normal}
 .selection-toolbar .voice-palette :is(button,input){min-height:36px}
 .workspace .sticker-global-error{position:fixed;top:auto;bottom:60px;z-index:30}
@@ -38,7 +37,12 @@
  .selection-toolbar .voice-palette{gap:6px;min-width:200px}
 }
 @media(prefers-reduced-motion:reduce){.workspace *{scroll-behavior:auto!important}}
-.selection-toolbar .board-delete-selected{display:flex;align-items:center;justify-content:center;padding:8px 14px;border:1px solid #c64a58;border-radius:10px;background:#b93442;color:white;font:600 13px system-ui;cursor:pointer;touch-action:manipulation}
 .selection-toolbar .voice-palette-swatches{flex-wrap:wrap}
 .selection-toolbar .voice-palette .voice-swatch{width:32px;min-width:32px;height:36px;flex-basis:32px}
 .selection-toolbar .voice-palette{box-shadow:none!important;border-radius:0!important}
+.selection-lock{min-height:44px;padding:8px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel-bg);color:var(--panel-text);font:600 13px system-ui;cursor:pointer}
+.locked-selection-hint{font-size:12px;opacity:.75}
+.board.board-locked-selected .excalidraw .App-menu_left{display:none!important}
+
+.board.board-locked-selected .context-menu li:not([data-testid="toggleElementLock"]),
+.board.board-locked-selected .context-menu hr{display:none}

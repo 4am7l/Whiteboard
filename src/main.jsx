@@ -15,6 +15,7 @@ function App() {
     try { return localStorage.getItem("whiteboard-pattern") || "none"; } catch { return "none"; }
   });
   const [patternMenu, setPatternMenu] = useState(false);
+  const [toolsOpen,setToolsOpen]=useState(false);
   const [viewport, setViewport] = useState({ zoom: 1, x: 0, y: 0 });
   const [stickerMenu,setStickerMenu]=useState(false);
   const [libraryHost,setLibraryHost]=useState(null);
@@ -431,11 +432,13 @@ function App() {
   }
 
   if (!authorized) return <form className="login" onSubmit={login}><h1>Our Whiteboard ♡</h1><p>Enter our 6-digit code</p><input aria-label="6-digit code" type="password" inputMode="numeric" autoComplete="off" maxLength={6} pattern="[0-9]{6}" required value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ""))}/><button type="submit">Open board</button><p role="alert">{loginError}</p></form>;
-  return <main className="board"><div className="voice-controls"><button type="button" disabled={voiceBusy} onClick={recording?stopVoice:startVoice}>{voiceBusy?"Saving…":recording?"■ Stop voice":"🎙 Voice note"}</button>{recording&&<span className="voice-live">● Recording</span>}</div><button type="button" className={`theme-toggle ${theme === "dark" ? "theme-toggle--dark" : "theme-toggle--light"}`} title="Change theme" onClick={toggleTheme} aria-label="Toggle dark mode">{theme === "dark" ? "☀️ Light" : "🌙 Dark"}</button><div className="pattern-controls">
-      <button type="button" className={`pattern-button ${theme === "dark" ? "pattern-dark" : "pattern-light"}`} onClick={() => setPatternMenu(v => !v)} aria-expanded={patternMenu} aria-label="Board background">▦ Background</button>
-      {patternMenu && <div className={`pattern-menu ${theme === "dark" ? "pattern-dark" : "pattern-light"}`}>
-        {[["none", "Blank"], ["lines", "Horizontal lines"], ["squares", "Small squares"], ["dots", "Small dots"], ["graph", "Graph paper"]].map(([id, label]) =>
-          <button type="button" key={id} className={pattern === id ? "selected" : ""} onClick={() => choosePattern(id)}>{pattern === id ? "✓ " : ""}{label}</button>)}
+  return <main className="board"><div className={`board-tools ${theme==="dark"?"board-tools-dark":"board-tools-light"}`}>
+      <button type="button" className="board-tools-toggle" aria-expanded={toolsOpen} aria-label="Board tools" onClick={()=>{setToolsOpen(v=>!v);setPatternMenu(false)}}>{toolsOpen?"✕ Close":"⚙ Tools"}{recording?" ●":""}</button>
+      {toolsOpen&&<div className="board-tools-panel">
+        <button type="button" disabled={voiceBusy} onClick={recording?stopVoice:startVoice}>{voiceBusy?"Saving…":recording?"■ Stop voice":"🎙 Voice note"}</button>
+        <button type="button" onClick={toggleTheme}>{theme==="dark"?"☀️ Light mode":"🌙 Dark mode"}</button>
+        <button type="button" onClick={()=>setPatternMenu(v=>!v)} aria-expanded={patternMenu}>▦ Background {patternMenu?"▴":"▾"}</button>
+        {patternMenu&&<div className="board-tools-patterns">{[["none","Blank"],["lines","Lines"],["squares","Squares"],["dots","Dots"],["graph","Graph"]].map(([id,label])=><button type="button" key={id} className={pattern===id?"selected":""} onClick={()=>{choosePattern(id);setToolsOpen(false)}}>{label}</button>)}</div>}
       </div>}
     </div>
     {libraryHost&&createPortal(<section className={`sticker-library-inline ${theme==="dark"?"pattern-dark":"pattern-light"}`}>

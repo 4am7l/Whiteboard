@@ -40,7 +40,8 @@ function MusicCard({element,theme,viewport,onMove}){
   const music=element.customData.music;
   const audioMode=music.displayMode==="audio";
   const [active,setActive]=useState(false),[playing,setPlaying]=useState(false),[ready,setReady]=useState(false),[elapsed,setElapsed]=useState(0),[duration,setDuration]=useState(0),[failed,setFailed]=useState(false);
-  const mount=useRef(null),player=useRef(null),cardRef=useRef(null),dragRef=useRef(null),suppressClick=useRef(false);
+  const mount=useRef(null),player=useRef(null),cardRef=useRef(null),dragRef=useRef(null),suppressClick=useRef(false),moveHandlerRef=useRef(onMove);
+  moveHandlerRef.current=onMove;
   const youtube=music.provider==="youtube";
   const embed=youtube?"https://www.youtube-nocookie.com/embed/"+music.id+"?autoplay=1&rel=0":"https://open.spotify.com/embed/track/"+music.id;
   const url=music.provider==="preview"?(music.url||"https://music.apple.com"):youtube?"https://www.youtube.com/watch?v="+music.id:"https://open.spotify.com/track/"+music.id;
@@ -82,11 +83,11 @@ function MusicCard({element,theme,viewport,onMove}){
     const finish=e=>{
       const d=dragRef.current;if(!d||e.pointerId!==d.pointerId)return;
       dragRef.current=null;
-      if(d.moved){onMove(element.id,d.x+(e.clientX-d.startX)/viewport.zoom,d.y+(e.clientY-d.startY)/viewport.zoom);window.setTimeout(()=>{suppressClick.current=false},0)}
+      if(d.moved){moveHandlerRef.current?.(element.id,d.x+(e.clientX-d.startX)/viewport.zoom,d.y+(e.clientY-d.startY)/viewport.zoom);window.setTimeout(()=>{suppressClick.current=false},0)}
     };
-    window.addEventListener("pointermove",move);window.addEventListener("pointerup",finish);window.addEventListener("pointercancel",finish);
+    window.addEventListener("pointermove",move,true);window.addEventListener("pointerup",finish,true);window.addEventListener("pointercancel",finish,true);
     return()=>{window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",finish);window.removeEventListener("pointercancel",finish)};
-  },[element.id,element.x,element.y,viewport.zoom,viewport.x,viewport.y,onMove]);
+  },[element.id,element.x,element.y,viewport.zoom,viewport.x,viewport.y]);
   return <div className={`music-card music-card-${theme} music-glass-card ${audioMode?"music-glass-audio":"music-glass-video"}`} ref={cardRef} data-music-element={element.id} onPointerDown={e=>{stop(e);dragStart(e)}} onClickCapture={e=>{if(suppressClick.current){e.preventDefault();e.stopPropagation();suppressClick.current=false}}} onMouseDown={stop} onDoubleClick={stop} style={{left:(element.x+viewport.x)*viewport.zoom,top:(element.y+viewport.y)*viewport.zoom,width:element.width*viewport.zoom,height:element.height*viewport.zoom,transform:`rotate(${element.angle||0}rad)`,opacity:(element.opacity??100)/100}}>
     {audioMode&&youtube?<><div className="music-glass-hidden" aria-hidden="true"><div ref={mount}/></div><div className="music-glass-cover">{music.thumbnail?<img src={music.thumbnail} alt="Album artwork"/>:<div className="music-glass-art">♪</div>}<button type="button" className="music-glass-cover-play" onClick={toggle} disabled={!ready||failed} aria-label={playing?"Pause":"Play"}><svg viewBox="0 0 24 24" width="19" height="19" fill="currentColor">{playing?<path d="M6 4h4v16H6zm8 0h4v16h-4z"/>:<path d="M8 4v16l12-8z"/>}</svg></button></div><div className="music-glass-body"><div className="music-glass-title" title={music.title}>{music.title||"Music"}</div><div className="music-glass-artist">{music.channel||"YouTube"}</div><input type="range" aria-label="Song progress" min="0" max={Math.max(duration,1)} value={Math.min(elapsed,duration||1)} onChange={e=>{player.current?.seekTo?.(Number(e.target.value),true);setElapsed(Number(e.target.value))}}/><div className="music-glass-times"><span>{fmt(elapsed)}</span><span>{fmt(duration)}</span></div></div><a className="music-glass-link" href={url} target="_blank" rel="noopener noreferrer" aria-label="Open original"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 4h6v6M20 4l-9 9"/><path d="M20 13v6H5V4h6"/></svg></a>{failed&&<a className="music-glass-failure" href={url} target="_blank" rel="noopener noreferrer">Open on YouTube</a>}</>
     :<><div className="music-glass-video-top"><span>{music.title||"YouTube video"}</span><a href={url} target="_blank" rel="noopener noreferrer" aria-label="Open original"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 4h6v6M20 4l-9 9"/><path d="M20 13v6H5V4h6"/></svg></a></div>{music.provider==="preview"?<div className="music-preview-player"><strong>{music.title}</strong><audio controls src={music.previewUrl}/></div>:active?<iframe title="Song player" src={embed} allow="autoplay;encrypted-media;fullscreen;picture-in-picture" allowFullScreen referrerPolicy="strict-origin-when-cross-origin"/>:<button type="button" className="music-glass-video-poster" onClick={()=>setActive(true)} style={music.thumbnail?{backgroundImage:`linear-gradient(#0002,#0005),url("${music.thumbnail}")`}:undefined}><span className="music-glass-video-play"><svg viewBox="0 0 24 24" width="25" height="25" fill="currentColor"><path d="M8 4v16l12-8z"/></svg></span></button>}</>}
@@ -432,7 +433,7 @@ function App() {
   const moveMusicCard=(id,x,y)=>{
     const editor=apiRef.current;if(!editor)return;
     const current=editor.getSceneElementsIncludingDeleted();
-    const next=current.map(e=>e.id===id?{...e,x,y,version:e.version+1,versionNonce:Math.floor(Math.random()*2147483647),updated:Date.now()}:e);
+    const next=current.map(e=>e.id===id?{...e,x,y,version:(e.version||1)+1,versionNonce:Math.floor(Math.random()*2147483647),updated:Date.now()}:e);
     editor.updateScene({elements:next});
     const changed=next.find(e=>e.id===id);
     if(changed){pending.current.set(id,changed);known.current.set(id,changed.version);setMusicCards(old=>old.map(e=>e.id===id?changed:e))}

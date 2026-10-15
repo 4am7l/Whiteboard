@@ -82,7 +82,7 @@ function App() {
           }
           known.current.set(element.id, Math.max(known.current.get(element.id) ?? -1, incomingVersion));
         }
-        await Promise.all(elements.filter(e=>e.type==="image"&&!e.isDeleted&&String(e.fileId||"").startsWith("sticker:")).map(e=>loadImageFile(e.fileId)));
+        await Promise.all(elements.filter(e=>e.type==="image"&&!e.isDeleted&&String(e.fileId||"").startsWith("sticker:")).map(e=>loadImageFile(e.fileId).catch(()=>{})));
         if (changed) {
           applying.current = true;
           apiRef.current.updateScene({ elements: [...merged.values()] });
@@ -229,8 +229,10 @@ function App() {
           if(cancelled)return;
           const sticker=stickers.find(s=>s.id===p.sticker_id);
           if(!sticker)continue;
-          await placeSticker(sticker,p);
-          await fetch("/api/sticker-placements?id="+encodeURIComponent(p.id),{method:"DELETE"});
+          const created=await placeSticker(sticker,p);
+          if(!created)continue;
+          const saved=await fetch("/api/board",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({elements:[created]})});
+          if(saved.ok){pending.current.delete(created.id);await fetch("/api/sticker-placements?id="+encodeURIComponent(p.id),{method:"DELETE"})}
         }
       }catch(e){setStickerError("Legacy sticker migration: "+e.message)}
     }
@@ -277,11 +279,12 @@ function App() {
     const id=legacy?.id||crypto.randomUUID();
     const element={id,type:"image",x,y,width,height,angle:0,strokeColor:"transparent",backgroundColor:"transparent",fillStyle:"solid",strokeWidth:1,strokeStyle:"solid",roughness:0,opacity:100,groupIds:[],frameId:null,roundness:null,seed:Math.floor(Math.random()*2147483647),version:1,versionNonce:Math.floor(Math.random()*2147483647),isDeleted:false,boundElements:null,updated:Date.now(),link:null,locked:false,fileId,status:"saved",scale:[1,1]};
     const current=api.getSceneElementsIncludingDeleted();
-    if(current.some(e=>e.id===id))return;
+    if(current.some(e=>e.id===id))return current.find(e=>e.id===id);
     api.updateScene({elements:[...current,element],appState:{selectedElementIds:{[id]:true}}});
     pending.current.set(id,element);
     known.current.set(id,1);
     setStickerMenu(false);
+    return element;
   }
   function toggleTheme() {
     setTheme(previous => {
@@ -298,7 +301,8 @@ function App() {
   }
 
   function onChange(elements, appState) {
-    setSceneImages(elements.filter(e=>e.type==="image"&&!e.isDeleted&&String(e.fileId||"").startsWith("sticker:")));
+    const images=elements.filter(e=>e.type==="image"&&!e.isDeleted&&String(e.fileId||"").startsWith("sticker:"));
+    setSceneImages(old=>old.length===images.length&&old.every((e,i)=>e===images[i])?old:images);
     if (appState) {
       const next = { zoom: appState.zoom?.value || 1, x: appState.scrollX || 0, y: appState.scrollY || 0 };
       setViewport(old => old.zoom === next.zoom && old.x === next.x && old.y === next.y ? old : next);

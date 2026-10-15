@@ -288,3 +288,5 @@ html, body, #root { margin: 0; width: 100%; height: 100%; }
 .music-card iframe{border:0;border-radius:9px;width:100%;flex:1;min-height:0}
 .music-card-placeholder{display:flex;flex:1;align-items:center;justify-content:center;gap:12px;min-height:0}.music-card-placeholder button{border:0;border-radius:50%;background:#7560cf;color:#fff;width:43px;height:43px;cursor:pointer;font-size:17px}.music-card-placeholder span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:520px){.music-controls{left:10px;bottom:194px}}
+
+.music-result button{border:0;border-radius:6px;padding:5px 8px;background:#7560cf;color:white;cursor:pointer;margin-top:5px}.music-preview-player{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-height:0;flex:1}.music-preview-player img{width:42px;height:42px;border-radius:6px}.music-preview-player strong,.music-preview-player small{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.music-preview-player audio{width:100%;height:32px}.music-preview-player small{font-size:10px;opacity:.75}

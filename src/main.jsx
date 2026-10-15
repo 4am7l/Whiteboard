@@ -4,7 +4,6 @@ import { createPortal } from "react-dom";
 import { Excalidraw } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import "./style.css";
-import "plyr/dist/plyr.css";
 
 function VoiceNoteCard({element,theme,viewport}){
   const audioRef=useRef(null);
@@ -39,39 +38,66 @@ function parseMusicLink(raw){
 }
 function MusicCard({element,theme,viewport,onMove,onResize}){
   const music=element.customData.music;
-  const [mode,setMode]=useState("audio"),[playing,setPlaying]=useState(false),[time,setTime]=useState(0),[duration,setDuration]=useState(0),[playerStatus,setPlayerStatus]=useState("loading");
-  const mount=useRef(null),instance=useRef(null),gesture=useRef(null);
+  const [mode,setMode]=useState("audio");
+  const [ready,setReady]=useState(false),[playing,setPlaying]=useState(false),[position,setPosition]=useState(0),[duration,setDuration]=useState(0),[volume,setVolume]=useState(80),[muted,setMuted]=useState(false),[error,setError]=useState(false);
+  const mount=useRef(null),player=useRef(null),gesture=useRef(null);
   const youtube=music.provider==="youtube";
   useEffect(()=>{
     if(!youtube||!mount.current)return;
-    let disposed=false;
-    const host=document.createElement("div");
-    host.setAttribute("data-plyr-provider","youtube");host.setAttribute("data-plyr-embed-id",music.id);
-    mount.current.appendChild(host);
-    import("plyr").then(({default:Plyr})=>{
-      if(disposed)return;
-      const p=new Plyr(host,{controls:["play-large","play","progress","current-time","duration","mute","volume","settings","pip","fullscreen"],youtube:{noCookie:true,rel:0,modestbranding:1},resetOnEnd:false});
-      instance.current=p;
-      p.on("play",()=>setPlaying(true));p.on("pause",()=>setPlaying(false));
-      p.on("timeupdate",()=>{setTime(p.currentTime||0);setDuration(p.duration||0)});
-      p.on("ready",()=>{setPlayerStatus("ready");setDuration(p.duration||0)});p.on("error",()=>setPlayerStatus("error"));
-    }).catch(err=>{setPlayerStatus("error");console.error("Plyr initialization failed",err)});
-    return()=>{disposed=true;try{instance.current?.destroy()}catch{}instance.current=null;if(mount.current?.contains(host))mount.current.removeChild(host)};
+    let cancelled=false,created=false;
+    const init=()=>{
+      if(cancelled||created||!mount.current||!window.YT?.Player)return;
+      created=true;
+      const node=document.createElement("div");mount.current.appendChild(node);
+      const p=new window.YT.Player(node,{videoId:music.id,width:"100%",height:"100%",playerVars:{playsinline:1,rel:0,controls:0,disablekb:1,iv_load_policy:3},events:{
+        onReady:e=>{if(cancelled)return;player.current=e.target;setReady(true);e.target.setVolume(80)},
+        onStateChange:e=>{if(cancelled)return;setPlaying(e.data===window.YT.PlayerState.PLAYING);if(e.data===window.YT.PlayerState.ENDED)setPosition(0)},
+        onError:()=>{if(!cancelled)setError(true)}
+      }});
+      player.current=p;
+    };
+    if(window.YT?.Player)init();
+    else{
+      const previous=window.onYouTubeIframeAPIReady;
+      const callback=()=>{previous?.();init()};
+      window.onYouTubeIframeAPIReady=callback;
+      if(!document.querySelector("script[data-youtube-iframe-api]")){
+        const script=document.createElement("script");script.src="https://www.youtube.com/iframe_api";script.dataset.youtubeIframeApi="1";document.head.appendChild(script);
+      }
+    }
+    return()=>{cancelled=true;try{player.current?.destroy?.()}catch{}player.current=null;if(mount.current)mount.current.replaceChildren()};
   },[youtube,music.id]);
+  useEffect(()=>{if(!ready)return;const timer=setInterval(()=>{try{setPosition(player.current?.getCurrentTime?.()||0);setDuration(player.current?.getDuration?.()||0)}catch{}},500);return()=>clearInterval(timer)},[ready]);
+  const toggle=()=>{if(!ready)return;playing?player.current?.pauseVideo?.():player.current?.playVideo?.()};
   const fmt=t=>Number.isFinite(t)?Math.floor(t/60)+":"+String(Math.floor(t%60)).padStart(2,"0"):"0:00";
+  const stop=e=>e.stopPropagation();
   const begin=e=>{if(e.button!==0||e.target.closest("button,a,input"))return;e.preventDefault();e.stopPropagation();gesture.current={kind:"move",x:e.clientX,y:e.clientY,ox:element.x,oy:element.y};e.currentTarget.setPointerCapture(e.pointerId)};
-  const end=e=>{const g=gesture.current;if(!g)return;gesture.current=null;if(g.kind==="move")onMove(element.id,g.ox+(e.clientX-g.x)/viewport.zoom,g.oy+(e.clientY-g.y)/viewport.zoom)};
+  const move=e=>{const g=gesture.current;if(g?.kind==="move"){e.preventDefault();e.stopPropagation()}};
+  const end=e=>{const g=gesture.current;if(!g)return;gesture.current=null;e.stopPropagation();if(g.kind==="move")onMove(element.id,g.ox+(e.clientX-g.x)/viewport.zoom,g.oy+(e.clientY-g.y)/viewport.zoom)};
   const resizeStart=e=>{e.preventDefault();e.stopPropagation();gesture.current={kind:"resize",x:e.clientX,y:e.clientY,w:element.width,h:element.height};e.currentTarget.setPointerCapture(e.pointerId)};
-  const resizeEnd=e=>{const g=gesture.current;if(!g||g.kind!=="resize")return;gesture.current=null;onResize(element.id,Math.max(280,g.w+(e.clientX-g.x)/viewport.zoom),Math.max(220,g.h+(e.clientY-g.y)/viewport.zoom))};
-  const isolate=e=>e.stopPropagation();
+  const resizeEnd=e=>{const g=gesture.current;if(!g||g.kind!=="resize")return;gesture.current=null;e.stopPropagation();onResize(element.id,Math.max(290,g.w+(e.clientX-g.x)/viewport.zoom),Math.max(220,g.h+(e.clientY-g.y)/viewport.zoom))};
   const url=youtube?"https://www.youtube.com/watch?v="+music.id:music.provider==="spotify"?"https://open.spotify.com/track/"+music.id:music.url;
-  return <div className={`music-card music-card-${theme} music-plyr-card music-plyr-${mode}`} data-music-element={element.id} onPointerDown={isolate} onPointerMove={isolate} onPointerUp={isolate} onMouseDown={isolate} onTouchStart={isolate} onDoubleClick={isolate} style={{left:(element.x+viewport.x)*viewport.zoom,top:(element.y+viewport.y)*viewport.zoom,width:element.width*viewport.zoom,height:element.height*viewport.zoom,transform:`rotate(${element.angle||0}rad)`,opacity:(element.opacity??100)/100}}>
-    <div className="music-plyr-header" onPointerDown={begin} onPointerUp={end} onPointerCancel={()=>gesture.current=null}><span className="music-plyr-drag">⠿</span><span className="music-plyr-name" title={music.title}>{music.title||"Music"}</span><div className="music-plyr-switch"><button type="button" className={mode==="audio"?"on":""} onClick={()=>setMode("audio")}>♫ Song</button><button type="button" className={mode==="video"?"on":""} onClick={()=>setMode("video")}>▣ Video</button></div><a href={url} target="_blank" rel="noopener noreferrer" title="Open original">↗</a></div>
-    {youtube?<><div className={`music-plyr-video ${mode==="audio"?"music-plyr-video-audio":""}`} onPointerDown={e=>e.stopPropagation()}><div ref={mount}/>{playerStatus!=="ready"&&<div className="music-plyr-status">{playerStatus==="error"?"Video player unavailable":"Loading video player…"}</div>}</div>
-      {mode==="audio"&&<div className="music-plyr-song" onPointerDown={e=>e.stopPropagation()}><div className="music-plyr-cover">{music.thumbnail?<img src={music.thumbnail} alt="Cover"/>:"♫"}</div><div className="music-plyr-track"><strong>{music.title||"Song"}</strong><small>{music.channel||"YouTube Music"}</small></div><button type="button" className="music-plyr-play" onClick={()=>instance.current?.togglePlay()}>{playing?"Ⅱ":"▶"}</button></div>}
-      {mode==="audio"&&<div className="music-plyr-audio-controls" onPointerDown={e=>e.stopPropagation()}><input aria-label="Seek" type="range" min="0" max={Math.max(duration,1)} value={Math.min(time,duration||1)} onChange={e=>{if(instance.current)instance.current.currentTime=Number(e.target.value)}}/><span>{fmt(time)} / {fmt(duration)}</span><label>◖ <input aria-label="Volume" type="range" min="0" max="1" step=".01" defaultValue=".8" onChange={e=>{if(instance.current)instance.current.volume=Number(e.target.value)}}/></label></div>}
-    </>:<div className="music-plyr-fallback" onPointerDown={e=>e.stopPropagation()}><iframe title="Music" src={music.provider==="spotify"?"https://open.spotify.com/embed/track/"+music.id:music.url} allow="autoplay;encrypted-media;fullscreen;picture-in-picture"/></div>}
-    <div className="music-resize-grip" title="Resize card" onPointerDown={resizeStart} onPointerUp={resizeEnd} onPointerCancel={()=>gesture.current=null}>◢</div>
+  return <div className={`music-card music-custom-card music-custom-${mode} music-card-${theme}`} data-music-element={element.id} onPointerDown={stop} onPointerMove={stop} onPointerUp={stop} onMouseDown={stop} onDoubleClick={stop} style={{left:(element.x+viewport.x)*viewport.zoom,top:(element.y+viewport.y)*viewport.zoom,width:element.width*viewport.zoom,height:element.height*viewport.zoom,transform:`rotate(${element.angle||0}rad)`,opacity:(element.opacity??100)/100}}>
+    <div className="music-custom-header" onPointerDown={begin} onPointerMove={move} onPointerUp={end} onPointerCancel={()=>gesture.current=null}>
+      <span className="music-custom-grip" aria-hidden="true"><svg viewBox="0 0 18 18" width="18" height="18" fill="currentColor"><circle cx="5" cy="4" r="1.3"/><circle cx="12" cy="4" r="1.3"/><circle cx="5" cy="9" r="1.3"/><circle cx="12" cy="9" r="1.3"/><circle cx="5" cy="14" r="1.3"/><circle cx="12" cy="14" r="1.3"/></svg></span>
+      <span className="music-custom-heading">NOW PLAYING</span>
+      <div className="music-custom-tabs"><button type="button" className={mode==="audio"?"active":""} onClick={()=>setMode("audio")}>Music</button><button type="button" className={mode==="video"?"active":""} onClick={()=>setMode("video")}>Video</button></div>
+      <a href={url} target="_blank" rel="noopener noreferrer" title="Open source" aria-label="Open source"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14 4h6v6M20 4l-9 9"/><path d="M20 13v6H5V4h6"/></svg></a>
+    </div>
+    {youtube?<><div className={`music-custom-video ${mode==="audio"?"music-custom-video-hidden":""}`} onPointerDown={stop}><div ref={mount}/>{mode==="video"&&<button className="music-custom-video-hit" type="button" onClick={toggle} aria-label={playing?"Pause video":"Play video"}><svg viewBox="0 0 24 24" width="30" height="30" fill="currentColor">{playing?<path d="M7 5h4v14H7zm6 0h4v14h-4z"/>:<path d="M8 5v14l11-7z"/>}</svg></button>}</div>
+      {mode==="audio"&&<div className="music-custom-song" onPointerDown={stop}><div className="music-custom-cover">{music.thumbnail?<img src={music.thumbnail} alt="Album cover"/>:<span>♪</span>}</div><div className="music-custom-meta"><strong title={music.title}>{music.title||"Untitled"}</strong><span>{music.channel||"YouTube"}</span><div className="music-custom-bars" aria-hidden="true">{Array.from({length:32},(_,i)=><i key={i} style={{height:(6+Math.abs(Math.sin(i*1.9)*Math.cos(i*.7))*24)+"px",opacity:i/32<position/(duration||1)?1:.4}}/>)}</div></div></div>}
+      <div className="music-custom-controls" onPointerDown={stop}>
+        <input className="music-custom-seek" type="range" aria-label="Seek" min="0" max={Math.max(duration,1)} step="1" value={Math.min(position,duration||1)} onChange={e=>{player.current?.seekTo?.(Number(e.target.value),true);setPosition(Number(e.target.value))}} style={{background:`linear-gradient(to right,#9679f2 ${(position/Math.max(duration,1))*100}%,#ffffff24 0)`}}/>
+        <div className="music-custom-controls-row"><span className="music-custom-clock">{fmt(position)} <span>/ {fmt(duration)}</span></span><div className="music-custom-buttons">
+          <button type="button" title="Restart" aria-label="Restart" onClick={()=>{player.current?.seekTo?.(0,true);setPosition(0)}}><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M3 11a9 9 0 1 1 2.5 6.2M3 4v7h7"/></svg></button>
+          <button type="button" className="music-custom-play" disabled={!ready||error} aria-label={playing?"Pause":"Play"} onClick={toggle}><svg viewBox="0 0 24 24" width="21" height="21" fill="currentColor">{playing?<path d="M7 5h4v14H7zm6 0h4v14h-4z"/>:<path d="M8 5v14l11-7z"/>}</svg></button>
+          <button type="button" title={muted?"Unmute":"Mute"} aria-label={muted?"Unmute":"Mute"} onClick={()=>{if(muted){player.current?.unMute?.();setMuted(false)}else{player.current?.mute?.();setMuted(true)}}}><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5 6 9H3v6h3l5 4V5z"/>{muted?<path d="m16 9 5 6m0-6-5 6"/>:<><path d="M15 9a4 4 0 0 1 0 6"/><path d="M18 6a8 8 0 0 1 0 12"/></>}</svg></button>
+          <input type="range" aria-label="Volume" className="music-custom-volume" min="0" max="100" value={volume} onChange={e=>{const v=Number(e.target.value);setVolume(v);player.current?.setVolume?.(v);if(v>0){player.current?.unMute?.();setMuted(false)}}}/>
+        </div></div>
+        {error&&<span className="music-custom-error">This video cannot be embedded. <a href={url} target="_blank" rel="noopener noreferrer">Open on YouTube</a></span>}
+      </div>
+    </>:<div className="music-custom-external" onPointerDown={stop}><iframe title="Music player" src={music.provider==="spotify"?"https://open.spotify.com/embed/track/"+music.id:music.url} allow="autoplay;encrypted-media;fullscreen;picture-in-picture"/></div>}
+    <div className="music-custom-resize" title="Resize" onPointerDown={resizeStart} onPointerUp={resizeEnd} onPointerCancel={()=>gesture.current=null}><svg viewBox="0 0 20 20" width="14" height="14" stroke="currentColor" fill="none" strokeWidth="1.8"><path d="M7 17 17 7M12 17h5v-5"/></svg></div>
   </div>;
 }
 

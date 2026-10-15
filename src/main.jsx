@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { Excalidraw } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import "./style.css";
+import { STICKER_PACKS, getStickerPackItems } from "./stickerPacks";
 
 function VoiceNoteCard({element,theme,viewport}){
   const audioRef=useRef(null);
@@ -91,6 +92,11 @@ function App() {
   const [searchSource,setSearchSource]=useState("giphy");
   const [favoriteIds,setFavoriteIds]=useState([]);
   const [stickerTab,setStickerTab]=useState("saved");
+  const [selectedPack,setSelectedPack]=useState(null);
+  const [packItems,setPackItems]=useState([]);
+  const [packQuery,setPackQuery]=useState("");
+  const [packPage,setPackPage]=useState(1);
+  const [packLoading,setPackLoading]=useState(false);
   const [searchItems,setSearchItems]=useState([]);
   const [searchBusy,setSearchBusy]=useState(false);
   const [stickers,setStickers]=useState([]);
@@ -429,6 +435,49 @@ function App() {
     imageLoads.current.set(fileId,task);
     try{await task}finally{imageLoads.current.delete(fileId)}
   }
+  useEffect(()=>{
+    if(!selectedPack)return;
+    let active=true;
+    setPackItems([]);setPackPage(1);setPackQuery("");setPackLoading(true);
+    getStickerPackItems(selectedPack).then(items=>{if(active)setPackItems(items)}).catch(error=>{if(active)setStickerError(error.message)}).finally(()=>{if(active)setPackLoading(false)});
+    return()=>{active=false};
+  },[selectedPack]);
+
+  async function addPackSticker(item){
+    if(!apiRef.current){setStickerError("Board editor is not ready");return}
+    setStickerError("");
+    try{
+      const response=await fetch(item.url);
+      if(!response.ok)throw Error("Sticker image unavailable");
+      const svg=await response.text();
+      if(!/<svg[\\s>]/i.test(svg))throw Error("Sticker is not SVG");
+      const source=new Blob([svg],{type:"image/svg+xml"});
+      const bitmap=await createImageBitmap(source).catch(()=>null);
+      const img=bitmap || await new Promise((resolve,reject)=>{
+        const image=new Image(),objectUrl=URL.createObjectURL(source);
+        image.onload=()=>{URL.revokeObjectURL(objectUrl);resolve(image)};
+        image.onerror=()=>{URL.revokeObjectURL(objectUrl);reject(Error("Could not render sticker"))};
+        image.src=objectUrl;
+      });
+      const canvas=document.createElement("canvas");
+      const ratio=Math.min(3,1024/Math.max(img.width||256,img.height||256));
+      canvas.width=Math.max(1,Math.round((img.width||256)*ratio));
+      canvas.height=Math.max(1,Math.round((img.height||256)*ratio));
+      canvas.getContext("2d").drawImage(img,0,0,canvas.width,canvas.height);
+      bitmap?.close();
+      const dataURL=canvas.toDataURL("image/png");
+      const fileId=crypto.randomUUID();
+      apiRef.current.addFiles([{id:fileId,dataURL,mimeType:"image/png",created:Date.now(),lastRetrieved:Date.now()}]);
+      const state=apiRef.current.getAppState(),zoom=state.zoom?.value||1;
+      const width=150,height=width*canvas.height/canvas.width;
+      const id=crypto.randomUUID();
+      const x=innerWidth/(2*zoom)-(state.scrollX||0)-width/2;
+      const y=innerHeight/(2*zoom)-(state.scrollY||0)-height/2;
+      const element={id,type:"image",x,y,width,height,angle:0,strokeColor:"transparent",backgroundColor:"transparent",fillStyle:"solid",strokeWidth:1,strokeStyle:"solid",roughness:0,opacity:100,groupIds:[],frameId:null,roundness:null,seed:Math.floor(Math.random()*2147483647),version:1,versionNonce:Math.floor(Math.random()*2147483647),isDeleted:false,boundElements:null,updated:Date.now(),link:null,locked:false,fileId,status:"saved",scale:[1,1]};
+      apiRef.current.updateScene({elements:[...apiRef.current.getSceneElementsIncludingDeleted(),element],appState:{selectedElementIds:{[id]:true}}});
+      pending.current.set(id,element);known.current.set(id,1);
+    }catch(error){setStickerError(error.message)}
+  }
   async function placeSticker(sticker,legacy=null) {
     if(!api){setStickerError("Board editor is not ready");return}
     const fileId="sticker:"+sticker.id;
@@ -633,12 +682,22 @@ function App() {
     {libraryHost&&createPortal(<section className={`sticker-library-inline ${stickerMenu?"sticker-library-open":""} ${theme==="dark"?"pattern-dark":"pattern-light"}`}>
       <button type="button" className="sticker-section-toggle" onClick={()=>setStickerMenu(v=>!v)}>♡ Stickers {stickerMenu?"▴":"▾"}</button>
       {stickerMenu&&<div className="sticker-library-content">
-        <div className="sticker-tabs">{[["saved","Saved"],["favorites","♡ Favorites"],["search","Search"]].map(([id,label])=><button type="button" key={id} className={stickerTab===id?"active":""} onClick={()=>setStickerTab(id)}>{label}</button>)}</div>
+        <div className="sticker-tabs">{[["saved","Saved"],["favorites","♡ Favorites"],["packs","Doodles"],["search","Search"]].map(([id,label])=><button type="button" key={id} className={stickerTab===id?"active":""} onClick={()=>setStickerTab(id)}>{label}</button>)}</div>
         {stickerTab==="saved"&&<>
           <label className="sticker-upload">＋ Upload PNG / JPG / WebP / GIF<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple onChange={uploadSticker} hidden/></label>
           <div className="sticker-grid">{stickers.map(sticker=><div className="sticker-tile" key={sticker.id}><button type="button" title={sticker.name} onClick={()=>placeSticker(sticker)}><img src={sticker.url} alt={sticker.name}/></button><button type="button" className="favorite-action" aria-label="Toggle favorite" onClick={()=>toggleFavorite(sticker.id)}>{favoriteIds.includes(sticker.id)?"♥":"♡"}</button></div>)}</div>
         </>}
         {stickerTab==="favorites"&&<div className="sticker-grid">{stickers.filter(s=>favoriteIds.includes(s.id)).map(sticker=><div className="sticker-tile" key={sticker.id}><button type="button" onClick={()=>placeSticker(sticker)}><img src={sticker.url} alt={sticker.name}/></button><button type="button" className="favorite-action" onClick={()=>toggleFavorite(sticker.id)} aria-label="Remove favorite">♥</button></div>)}</div>}
+        {stickerTab==="packs"&&<div className="doodle-library">
+          {!selectedPack?<div className="doodle-folders">{STICKER_PACKS.map(pack=><button type="button" key={pack.id} onClick={()=>setSelectedPack(pack)}><span>📁 {pack.name}</span><small>{pack.description}</small></button>)}</div>:<>
+            <button type="button" className="doodle-back" onClick={()=>setSelectedPack(null)}>← Folders</button>
+            <strong>{selectedPack.name}</strong>
+            <input className="doodle-filter" value={packQuery} onChange={e=>{setPackQuery(e.target.value);setPackPage(1)}} placeholder="Search drawings…" aria-label="Search doodles"/>
+            {packLoading?<small>Loading folder…</small>:<><small>{packItems.filter(item=>item.name.toLowerCase().includes(packQuery.toLowerCase())).length} stickers · {selectedPack.license}</small>
+            <div className="sticker-grid doodle-grid">{packItems.filter(item=>item.name.toLowerCase().includes(packQuery.toLowerCase())).slice(0,packPage*60).map(item=><button type="button" key={item.url} title={item.name} onClick={()=>addPackSticker(item)}><img loading="lazy" src={item.url} alt={item.name}/></button>)}</div>
+            {packItems.filter(item=>item.name.toLowerCase().includes(packQuery.toLowerCase())).length>packPage*60&&<button type="button" className="doodle-more" onClick={()=>setPackPage(n=>n+1)}>Load more</button>}</>}
+          </>}
+          </div>}
         {stickerTab==="search"&&<>
           <form className="sticker-search" onSubmit={searchGiphy}>
             <input aria-label="Search GIFs and stickers" placeholder="Search stickers or GIFs…" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}/>

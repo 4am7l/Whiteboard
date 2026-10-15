@@ -472,3 +472,8 @@ body > .doodle-panel .doodle-grid > button > img{
 /* Small logout button centered at the bottom of the whiteboard */
 .board-logout-bottom{position:fixed;left:50%;bottom:12px;transform:translateX(-50%);z-index:1000;padding:5px 12px;font-size:11px;line-height:1.4;border-radius:999px;border:1px solid rgba(128,128,128,.3);background:var(--island-bg-color,rgba(255,255,255,.88));color:var(--text-primary-color,#555);opacity:.8;cursor:pointer;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.08)}
 .board-logout-bottom:hover{opacity:1}
+
+/* Lock/unlock action beside the selection delete button */
+.board-lock-selected{position:absolute;right:122px;bottom:84px;z-index:2147483001;display:flex;align-items:center;justify-content:center;min-height:44px;min-width:92px;padding:10px 15px;border:1px solid #8886;border-radius:14px;background:#fff;color:#292536;font:600 14px system-ui;box-shadow:0 5px 18px #0002;cursor:pointer;touch-action:manipulation}
+.board-lock-selected:hover{background:#f1ebff}
+@media(max-width:650px){.board-lock-selected{right:116px;bottom:72px;min-height:44px;padding:9px 13px}}

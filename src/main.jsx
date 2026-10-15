@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { createPortal } from "react-dom";
 import { Excalidraw } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import "./style.css";
@@ -86,7 +85,6 @@ function App() {
   const [toolsOpen,setToolsOpen]=useState(false);
   const [viewport, setViewport] = useState({ zoom: 1, x: 0, y: 0 });
   const [stickerMenu,setStickerMenu]=useState(false);
-  const [libraryHost,setLibraryHost]=useState(null);
   const [searchQuery,setSearchQuery]=useState("");
   const [searchKind,setSearchKind]=useState("stickers");
   const [searchSource,setSearchSource]=useState("giphy");
@@ -255,17 +253,6 @@ function App() {
     };
   }, [api, authorized]);
 
-  useEffect(()=>{
-    if(!authorized)return;
-    const locate=()=>{
-      const host=document.querySelector('.library-menu, .layer-ui__library, [data-testid="library-menu"], .sidebar[data-name="library"]');
-      setLibraryHost(old=>old===host?old:host);
-    };
-    const observer=new MutationObserver(locate);
-    observer.observe(document.body,{childList:true,subtree:true});
-    locate();
-    return()=>observer.disconnect();
-  },[authorized]);
   // Keep media on the canvas visible, but never let it cover an open Excalidraw sidebar.
   useEffect(()=>{
     if(!authorized)return;

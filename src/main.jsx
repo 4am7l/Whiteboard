@@ -438,7 +438,7 @@ function App() {
       const response=await fetch(item.url);
       if(!response.ok)throw Error("Sticker image unavailable");
       const svg=await response.text();
-      if(!/<svg[\\s>]/i.test(svg))throw Error("Sticker is not SVG");
+      if(!/<svg(?:\s|>)/i.test(svg))throw Error("Sticker is not SVG");
       const source=new Blob([svg],{type:"image/svg+xml"});
       const bitmap=await createImageBitmap(source).catch(()=>null);
       const img=bitmap || await new Promise((resolve,reject)=>{

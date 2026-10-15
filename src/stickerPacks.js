@@ -10,7 +10,7 @@ export async function getStickerPackItems(pack){
   if(pack.catalog){
     const response=await fetch(pack.catalog);
     if(!response.ok)throw Error("Could not load sticker folder");
-    return (await response.json()).map(name=>({name:name.replace(/\\.svg$/,"").replace(/-/g," "),url:pack.prefix+name}));
+    return (await response.json()).map(name=>({name:name.replace(/\.svg$/,"").replace(/-/g," "),url:pack.prefix+name}));
   }
   const response=await fetch("https://api.iconify.design/collection?prefix="+encodeURIComponent(pack.iconify));
   if(!response.ok)throw Error("Could not load icon collection");

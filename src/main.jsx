@@ -194,16 +194,27 @@ function App() {
     async function flush() {
       if (busy || !loaded.current || !pending.current.size) return;
       busy = true;
-      const batch = [...pending.current.values()];
+      // Keep each D1 write below the API's 200-element / 400KB limits.
+      const batch = [];
+      let bytes = 15;
+      for (const element of pending.current.values()) {
+        const size = JSON.stringify(element).length + 1;
+        if (batch.length && (batch.length >= 50 || bytes + size > 300000)) break;
+        batch.push(element);
+        bytes += size;
+      }
       try {
         const response = await fetch("/api/board", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ elements: batch }) });
-        if (!response.ok) throw new Error("Save failed");
+        if (!response.ok) {
+          const detail = await response.json().catch(() => ({}));
+          throw new Error(detail.error || "Save failed");
+        }
         if (!active) return;
         for (const element of batch) {
           if (pending.current.get(element.id)?.versionNonce === element.versionNonce) pending.current.delete(element.id);
         }
         setStatus("Saved");
-      } catch { setStatus("Save failed — retrying"); }
+      } catch (error) { console.error("Board save failed:", error); setStatus("Save failed — retrying"); }
       finally { busy = false; }
     }
     const timer = setInterval(flush, 900);

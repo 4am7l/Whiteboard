@@ -264,3 +264,10 @@ html, body, #root { margin: 0; width: 100%; height: 100%; }
 .voice-chat-meta{display:flex;justify-content:space-between;align-items:center;gap:4px;font:500 10px system-ui;opacity:.7}
 .voice-chat-mic{font-size:11px}
 .voice-card-chat audio{display:none}
+
+/* Native-looking voice playback control: no sticker-like styling. */
+.voice-chat-play{appearance:none;-webkit-appearance:none;display:flex;align-items:center;justify-content:center;background:var(--voice-accent);color:#fff;box-shadow:none;outline-offset:3px;transition:filter .15s ease,transform .15s ease}
+.voice-chat-play svg{display:block;flex:none;filter:none;pointer-events:none}
+.voice-chat-play:hover{filter:brightness(1.09)}
+.voice-chat-play:active{transform:scale(.95)}
+.voice-chat-play:focus-visible{outline:2px solid var(--voice-accent)}

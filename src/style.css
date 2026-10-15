@@ -323,9 +323,6 @@ html, body, #root { margin: 0; width: 100%; height: 100%; }
 .board.board-media-selected .excalidraw .App-menu_left .properties-content{display:none!important}
 
 /* Accessible touch delete action for selected board elements (iPad/phones/desktop). */
-.board-delete-selected:hover{background:#a82435}
-.board-delete-selected:active{transform:scale(.97)}
-@media(max-width:650px){.board-delete-selected{right:12px;bottom:72px;min-height:44px;padding:9px 13px}}
 
 /* Searchable doodle sticker folders */
 .doodle-library{display:grid;gap:9px;min-width:0}

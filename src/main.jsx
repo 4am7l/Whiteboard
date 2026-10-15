@@ -115,6 +115,7 @@ function App() {
   const [musicError,setMusicError]=useState("");
   const [selectedVoiceId,setSelectedVoiceId]=useState(null);
   const [selectedBoardIds,setSelectedBoardIds]=useState([]);
+  const [selectionMenuOpen,setSelectionMenuOpen]=useState(false);
   const [voiceHex,setVoiceHex]=useState("");
   const [recording,setRecording]=useState(false);
   const [voiceBusy,setVoiceBusy]=useState(false);
@@ -537,6 +538,51 @@ function App() {
       known.current.set(element.id,element.version);
     }
   }
+  function transformSelectedBoardItems(action){
+    const editor=apiRef.current;
+    if(!editor)return;
+    const ids=Object.keys(editor.getAppState()?.selectedElementIds||{}).filter(id=>editor.getAppState().selectedElementIds[id]);
+    if(!ids.length)return;
+    const all=editor.getSceneElementsIncludingDeleted();
+    const selected=all.filter(e=>ids.includes(e.id)&&!e.isDeleted);
+    if(!selected.length)return;
+    const now=Date.now();
+    const changed=new Map();
+    let next=all;
+    if(action==="duplicate"){
+      const copies=selected.filter(e=>!e.locked).map(e=>({...e,id:crypto.randomUUID(),x:e.x+24,y:e.y+24,groupIds:[],version:1,versionNonce:Math.floor(Math.random()*2147483647),updated:now,locked:false}));
+      if(!copies.length)return;
+      next=[...all,...copies];
+      editor.updateScene({elements:next,appState:{selectedElementIds:Object.fromEntries(copies.map(e=>[e.id,true]))}});
+      for(const e of copies){pending.current.set(e.id,e);known.current.set(e.id,e.version)}
+      setSelectionMenuOpen(false);
+      return;
+    }
+    if(["front","back","forward","backward"].includes(action)){
+      const selectedIds=new Set(selected.filter(e=>!e.locked).map(e=>e.id));
+      if(!selectedIds.size)return;
+      if(action==="front")next=[...all.filter(e=>!selectedIds.has(e.id)),...all.filter(e=>selectedIds.has(e.id))];
+      if(action==="back")next=[...all.filter(e=>selectedIds.has(e.id)),...all.filter(e=>!selectedIds.has(e.id))];
+      if(action==="forward"||action==="backward"){
+        next=[...all];
+        if(action==="forward"){for(let i=next.length-2;i>=0;i--)if(selectedIds.has(next[i].id)&&!selectedIds.has(next[i+1].id))[next[i],next[i+1]]=[next[i+1],next[i]]}
+        else{for(let i=1;i<next.length;i++)if(selectedIds.has(next[i].id)&&!selectedIds.has(next[i-1].id))[next[i],next[i-1]]=[next[i-1],next[i]]}
+      }
+      // Reordering only affects local scene order; persist updated versions to sync it.
+      next=next.map(e=>selectedIds.has(e.id)?{...e,version:(e.version||0)+1,versionNonce:Math.floor(Math.random()*2147483647),updated:now}:e);
+      for(const e of next)if(selectedIds.has(e.id))changed.set(e.id,e);
+    }else if(action==="flipH"||action==="flipV"){
+      for(const e of selected){
+        if(e.locked)continue;
+        const scale=e.scale||[1,1];
+        changed.set(e.id,{...e,scale:action==="flipH"?[-scale[0],scale[1]]:[scale[0],-scale[1]],version:(e.version||0)+1,versionNonce:Math.floor(Math.random()*2147483647),updated:now});
+      }
+      next=all.map(e=>changed.get(e.id)||e);
+    }else return;
+    editor.updateScene({elements:next,appState:{selectedElementIds:Object.fromEntries(ids.map(id=>[id,true]))}});
+    for(const e of changed.values()){pending.current.set(e.id,e);known.current.set(e.id,e.version)}
+    setSelectionMenuOpen(false);
+  }
   function deleteSelectedBoardItems(){
     const editor=apiRef.current;
     if(!editor)return;
@@ -751,7 +797,7 @@ function App() {
     </>, document.body)}
     {stickerError&&<div className="sticker-global-error" role="alert">{stickerError}<button type="button" onClick={()=>setStickerError("")}>×</button></div>}
     {selectedVoiceId&&<div className={`voice-palette voice-palette-${theme}`} aria-label="Voice note appearance"><span>Voice color</span><div className="voice-palette-swatches">{[["default","Auto"],["violet","Purple"],["blue","Blue"],["rose","Pink"],["mint","Mint"]].map(([value,label])=><button key={value} type="button" className={"voice-swatch voice-swatch-"+value} title={label} aria-label={label} onClick={()=>{setVoiceHex("");setVoiceColor(value)}}>{value==="default"?"◐":""}</button>)}</div><label className="voice-custom-picker" title="Pick a custom color">✎ <input aria-label="Pick any color" type="color" value={/^#[0-9a-fA-F]{6}$/.test(voiceHex)?voiceHex:"#9274db"} onChange={e=>{setVoiceHex(e.target.value);setVoiceColor(e.target.value)}}/></label><form className="voice-hex-form" onSubmit={e=>{e.preventDefault();if(/^#[0-9a-fA-F]{6}$/.test(voiceHex))setVoiceColor(voiceHex)}}><input aria-label="Hex color" placeholder="#9274DB" maxLength={7} value={voiceHex} onChange={e=>setVoiceHex(e.target.value)} /><button type="submit" disabled={!/^#[0-9a-fA-F]{6}$/.test(voiceHex)}>Apply</button></form></div>}
-    <Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} name="Our Whiteboard" />{selectedBoardIds.length>0&&<button type="button" className="board-lock-selected" onClick={toggleSelectedBoardLock} aria-label="Lock or unlock selected items" title="Lock or unlock selected items">{selectedBoardIds.some(id=>api?.getSceneElementsIncludingDeleted()?.find(e=>e.id===id&&!e.isDeleted&&!e.locked))?"🔒 Lock":"🔓 Unlock"}</button>}{selectedBoardIds.length>0&&<button type="button" className="board-delete-selected" onClick={deleteSelectedBoardItems} aria-label="Delete selected items" title="Delete selected items">🗑 Delete{selectedBoardIds.length>1?" ("+selectedBoardIds.length+")":""}</button>}
+    <Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} name="Our Whiteboard" />{selectedBoardIds.length>0&&<button type="button" className="board-selection-more" onClick={()=>setSelectionMenuOpen(v=>!v)} aria-label="Selection actions" aria-expanded={selectionMenuOpen}>⋯ Options</button>}{selectionMenuOpen&&selectedBoardIds.length>0&&createPortal(<div className="board-selection-menu-layer"><button className="board-selection-menu-backdrop" type="button" aria-label="Close selection menu" onClick={()=>setSelectionMenuOpen(false)}></button><section className="board-selection-menu" role="dialog" aria-label="Selected item actions"><div className="board-selection-menu-head"><strong>Selection actions</strong><button type="button" onClick={()=>setSelectionMenuOpen(false)} aria-label="Close">✕</button></div><button type="button" onClick={()=>{toggleSelectedBoardLock();setSelectionMenuOpen(false)}}>{selectedBoardIds.some(id=>api?.getSceneElementsIncludingDeleted()?.find(e=>e.id===id&&!e.isDeleted&&!e.locked))?"🔒 Lock selected":"🔓 Unlock selected"}</button><button type="button" onClick={()=>transformSelectedBoardItems("duplicate")}>⧉ Duplicate</button><button type="button" onClick={()=>transformSelectedBoardItems("front")}>Bring to front</button><button type="button" onClick={()=>transformSelectedBoardItems("back")}>Send to back</button><button type="button" onClick={()=>transformSelectedBoardItems("forward")}>Bring forward</button><button type="button" onClick={()=>transformSelectedBoardItems("backward")}>Send backward</button><button type="button" onClick={()=>transformSelectedBoardItems("flipH")}>Flip horizontal</button><button type="button" onClick={()=>transformSelectedBoardItems("flipV")}>Flip vertical</button><button type="button" className="danger" onClick={()=>{deleteSelectedBoardItems();setSelectionMenuOpen(false)}}>🗑 Delete</button></section></div>,document.body)}{selectedBoardIds.length>0&&<button type="button" className="board-lock-selected" onClick={toggleSelectedBoardLock} aria-label="Lock or unlock selected items" title="Lock or unlock selected items">{selectedBoardIds.some(id=>api?.getSceneElementsIncludingDeleted()?.find(e=>e.id===id&&!e.isDeleted&&!e.locked))?"🔒 Lock":"🔓 Unlock"}</button>}{selectedBoardIds.length>0&&<button type="button" className="board-delete-selected" onClick={deleteSelectedBoardItems} aria-label="Delete selected items" title="Delete selected items">🗑 Delete{selectedBoardIds.length>1?" ("+selectedBoardIds.length+")":""}</button>}
     <div className="voice-overlay">{voiceCards.map(e=><VoiceNoteCard key={e.id} element={e} theme={theme} viewport={viewport}/>)}</div><div className="music-overlay">{musicCards.map(e=><MusicCard key={e.id} element={e} theme={theme} viewport={viewport}/>)}</div>
     <div className="animated-stickers" aria-hidden="true">{sceneImages.filter(e=>String(e.fileId).endsWith(".gif")||(theme==="dark"&&imageSources[e.fileId])).map(e=>{
       const isGif=String(e.fileId).endsWith(".gif");

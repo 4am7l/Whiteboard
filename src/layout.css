@@ -269,3 +269,84 @@
   .workspace .workspace-toolbar .voice-controls > .voice-cancel-recording{min-width:80px!important;padding:9px 10px!important}
   .workspace .workspace-toolbar .voice-controls > button:first-child{min-width:110px}
 }
+
+/* Music/video colors. Only the card chrome gets tinted: embedded YouTube
+   playback stays intact, and existing cards without a custom color keep
+   their original appearance. */
+.music-glass-card.music-glass-tinted.music-card-light{
+  background:linear-gradient(120deg,
+    color-mix(in srgb,var(--music-accent) 28%,#fff),
+    color-mix(in srgb,var(--music-accent) 13%,#fff))!important;
+  border-color:color-mix(in srgb,var(--music-accent) 60%,#fff)!important;
+  box-shadow:0 8px 25px #0002,inset 0 1px #ffffff80!important;
+}
+.music-glass-card.music-glass-tinted.music-card-dark{
+  background:linear-gradient(120deg,
+    color-mix(in srgb,var(--music-accent) 43%,#24232d),
+    color-mix(in srgb,var(--music-accent) 22%,#24232d))!important;
+  border-color:color-mix(in srgb,var(--music-accent) 60%,#393340)!important;
+  box-shadow:0 9px 26px #0005,inset 0 1px #ffffff20!important;
+}
+.music-glass-card.music-glass-tinted .music-glass-body input[type="range"]{
+  accent-color:var(--music-accent)!important;
+}
+.music-glass-card.music-glass-tinted .music-glass-video-top{
+  border-bottom:1px solid color-mix(in srgb,var(--music-accent) 38%,transparent);
+  padding-bottom:5px;
+}
+.music-glass-card.music-glass-tinted .music-glass-video-play{
+  box-shadow:0 0 0 3px var(--music-accent),0 5px 20px #0005!important;
+}
+.music-overlay .music-glass-card.music-glass-tinted .music-glass-cover-play{
+  background:color-mix(in srgb,var(--music-accent) 65%,#16131f)!important;
+}
+/* Selected audio/video uses the same appearance area as voice notes and Lock. */
+.appearance-lock-bar .music-palette{
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  gap:9px;
+  min-width:0;
+}
+.appearance-lock-bar .music-palette .voice-palette-swatches{
+  display:flex;
+  flex-wrap:wrap;
+  gap:7px;
+  width:100%;
+}
+.appearance-lock-bar .music-palette .music-color-swatch{
+  display:grid;
+  place-items:center;
+  width:31px;
+  height:31px;
+  flex:0 0 31px;
+  border-radius:9px;
+  border:1px solid #8885;
+  color:inherit;
+  font-size:17px;
+}
+.appearance-lock-bar .music-palette .music-color-original{
+  background:linear-gradient(135deg,#ffffff 48%,#303040 52%);
+  color:#8d62d4;
+}
+.appearance-lock-bar .music-palette .voice-custom-picker{
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+}
+.appearance-lock-bar .music-palette .voice-hex-form{
+  display:flex;
+  width:100%;
+  align-items:center;
+  gap:6px;
+  min-width:0;
+}
+.appearance-lock-bar .music-palette .voice-hex-form input{
+  width:auto;
+  min-width:0;
+  flex:1 1 85px;
+}
+.appearance-lock-bar .music-palette .voice-hex-form button{
+  flex:0 0 auto;
+}

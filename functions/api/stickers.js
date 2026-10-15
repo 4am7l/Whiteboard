@@ -8,7 +8,7 @@ export async function onRequestPost({request,env}) {
  if (!env.STICKERS) return Response.json({error:"R2 binding STICKERS missing"},{status:503});
  const form=await request.formData().catch(()=>null);
  const file=form?.get("file");
- if (!(file instanceof File)||!allowed.has(file.type)||file.size>5*1024*1024||file.size===0) return Response.json({error:"PNG, JPG, WebP or GIF up to 5 MB only"},{status:400});
+ if (!(file instanceof File)||!allowed.has(file.type)||file.size>30*1024*1024||file.size===0) return Response.json({error:"PNG, JPG, WebP or GIF up to 30 MB only"},{status:400});
  const id=crypto.randomUUID()+"."+allowed.get(file.type);
  await env.STICKERS.put("library/"+id,file.stream(),{httpMetadata:{contentType:file.type},customMetadata:{name:file.name.slice(0,100)}});
  return Response.json({ok:true,id});

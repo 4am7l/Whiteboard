@@ -1,48 +1,168 @@
-/* Canvas 1–2, media 3, native controls 4, auxiliary panels 8,
-   native context menus 20, dialogs 1000. Keep these layers comparable. */
-.workspace{height:100dvh;width:100%;display:flex;flex-direction:column;overflow:hidden;background:#faf9ff;color:#282536;font:13px system-ui;--panel-bg:#fff;--panel-text:#282536;--line:#dedbe9}
-.workspace-dark{background:#202027;color:#eee;--panel-bg:#292932;--panel-text:#eee;--line:#484650}
-.workspace-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:none;padding:8px max(10px,env(safe-area-inset-right)) 8px max(10px,env(safe-area-inset-left));border-bottom:1px solid var(--line)}
-.workspace-toolbar :is(.music-controls,.voice-controls,.pattern-controls,.theme-toggle,.doodle-panel-trigger,.board-logout-bottom){position:static!important;inset:auto!important;transform:none!important;z-index:auto!important;margin:0;box-shadow:none!important}
-.workspace-toolbar>button,.workspace-toolbar :is(.music-controls,.voice-controls,.pattern-controls)>button{min-height:44px;padding:8px 12px!important;border:1px solid var(--line)!important;border-radius:10px!important;background:var(--panel-bg)!important;color:var(--panel-text)!important;font:600 13px system-ui;cursor:pointer;white-space:nowrap}
-.workspace-toolbar button[aria-expanded=true]{background:#e9e3ff!important;color:#49388d!important;border-color:#a99bff!important}
-.workspace-toolbar .board-logout-bottom{margin-left:auto;font-size:12px!important;opacity:1}
-.workspace-toolbar .voice-live{font-size:11px}
-.workspace-toolbar :is(.music-panel,.doodle-panel,.pattern-menu){position:absolute!important;top:var(--toolbar-bottom,68px)!important;right:12px!important;left:auto!important;bottom:auto!important;z-index:8!important;width:min(360px,calc(100vw - 24px));max-height:calc(100dvh - var(--toolbar-bottom,68px) - 16px)!important;height:auto!important;overflow:auto!important;overscroll-behavior:contain;background:var(--panel-bg)!important;color:var(--panel-text)!important;border:1px solid var(--line)!important;border-radius:14px;padding:44px 12px 12px!important;box-shadow:0 12px 36px #0003}
-.workspace-toolbar .pattern-menu{width:220px;padding:8px!important}
-.workspace-toolbar .pattern-menu button{min-height:44px}
-.panel-close,.workspace-toolbar .doodle-panel-close{position:absolute;top:4px;right:6px;width:40px;height:40px;border:0;border-radius:8px;background:transparent;color:inherit;font-size:24px;cursor:pointer}
+/* Responsive full-screen whiteboard layout. All menus are overlays,
+   leaving the Excalidraw canvas at its full viewport height. */
+.workspace{
+  width:100%;height:100dvh;min-height:0;display:flex;flex-direction:column;
+  position:relative;overflow:hidden;background:#faf9ff;color:#282536;
+  font:13px system-ui;--panel-bg:#fff;--panel-text:#282536;--line:#dedbe9;
+}
+.workspace-dark{
+  background:#202027;color:#eee;--panel-bg:#292932;--panel-text:#eee;--line:#484650;
+}
 .workspace .board{height:auto;flex:1;min-height:0;width:100%;position:relative;isolation:auto}
 .board>.excalidraw{z-index:auto!important;isolation:auto!important}
 .board :is(.animated-stickers,.voice-overlay,.music-overlay,.placed-stickers){z-index:3;clip-path:none}
 .board .excalidraw .popover{z-index:20}
-.selection-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex:none;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--panel-bg);max-height:30dvh;overflow:auto}
-.selection-toolbar .voice-palette{position:static;inset:auto;transform:none;z-index:auto;flex:1;width:auto;max-width:100%;padding:0;background:transparent;border:0!important;box-shadow:none;backdrop-filter:none;white-space:normal}
-.selection-toolbar .voice-palette :is(button,input){min-height:36px}
-.workspace .sticker-global-error{position:fixed;top:auto;bottom:60px;z-index:30}
+
+/* Single floating launcher in the canvas' top-right corner. */
+.workspace-toolbox{
+  position:fixed;right:calc(12px + env(safe-area-inset-right));
+  top:calc(12px + env(safe-area-inset-top));z-index:20000;
+  display:flex;flex-direction:column;align-items:flex-end;gap:9px;
+  pointer-events:none;
+}
+.workspace-toolbox-trigger{
+  pointer-events:auto;display:flex;align-items:center;justify-content:center;gap:8px;
+  min-height:43px;min-width:45px;padding:8px 13px;border:1px solid #aaa8bc70;
+  border-radius:14px;background:rgba(255,255,255,.85);color:#302c3e;
+  box-shadow:0 5px 18px #0002;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  font:650 13px system-ui;cursor:pointer;touch-action:manipulation;
+}
+.workspace-dark .workspace-toolbox-trigger{background:rgba(38,36,48,.84);color:#f6f4ff;border-color:#bbb7d044}
+.workspace-toolbox-trigger>span:first-child{font-size:21px;line-height:1}
+.workspace-toolbox-trigger:hover,.workspace-toolbox-trigger[aria-expanded="true"]{border-color:#a99bff;background:rgba(236,231,255,.94)}
+.workspace-dark .workspace-toolbox-trigger:hover,.workspace-dark .workspace-toolbox-trigger[aria-expanded="true"]{background:rgba(68,61,91,.94)}
+
+/* Sliding tools menu. Kept mounted so search results and inputs persist. */
+.workspace-toolbox .workspace-toolbar{
+  pointer-events:auto;position:relative!important;inset:auto!important;transform:translateY(-7px);
+  display:flex!important;flex-direction:column;align-items:stretch;gap:9px;
+  width:min(342px,calc(100vw - 24px));max-height:calc(100dvh - 92px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;
+  box-sizing:border-box;padding:12px!important;
+  border:1px solid rgba(176,167,200,.5);border-radius:19px;
+  background:rgba(255,255,255,.86);color:var(--panel-text);
+  box-shadow:0 18px 45px #0003;
+  backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);
+  opacity:0;visibility:hidden;transition:opacity .17s ease,transform .17s ease,visibility .17s;
+  scrollbar-width:thin;
+}
+.workspace-dark .workspace-toolbar{background:rgba(34,33,43,.88);border-color:#8884}
+.workspace-toolbox.is-open .workspace-toolbar{opacity:1;visibility:visible;transform:translateY(0)}
+.workspace-toolbar :is(.music-controls,.voice-controls,.pattern-controls){
+  position:relative!important;inset:auto!important;transform:none!important;
+  z-index:auto!important;box-sizing:border-box;width:100%;margin:0!important;
+}
+.workspace-toolbar :is(.music-controls,.voice-controls,.pattern-controls)>button,
+.workspace-toolbar>.theme-toggle,.workspace-toolbar>.doodle-panel-trigger{
+  position:relative!important;inset:auto!important;transform:none!important;
+  width:100%!important;min-height:44px!important;margin:0!important;padding:10px 13px!important;
+  display:flex;align-items:center;justify-content:flex-start;text-align:left;
+  border:1px solid var(--line)!important;border-radius:12px!important;
+  background:rgba(255,255,255,.42)!important;color:var(--panel-text)!important;
+  box-shadow:none!important;font:600 13px system-ui;cursor:pointer;white-space:normal;
+  touch-action:manipulation;
+}
+.workspace-dark .workspace-toolbar :is(.music-controls,.voice-controls,.pattern-controls)>button,
+.workspace-dark .workspace-toolbar>.theme-toggle,.workspace-dark .workspace-toolbar>.doodle-panel-trigger{
+  background:rgba(255,255,255,.055)!important;
+}
+.workspace-toolbar button[aria-expanded="true"]{background:#e9e3ff!important;color:#49388d!important;border-color:#a99bff!important}
+.workspace-dark .workspace-toolbar button[aria-expanded="true"]{background:#55456d!important;color:#fff!important}
+.workspace-toolbar .voice-controls{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.workspace-toolbar .voice-controls>button{flex:1;min-width:140px}
+.workspace-toolbar .voice-live{font-size:11px}
+.workspace-toolbar .music-controls,.workspace-toolbar .pattern-controls{display:block}
+
+/* Put tool subpanels *inside* the drawer instead of floating over the board. */
+.workspace-toolbox .workspace-toolbar :is(.music-panel,.doodle-panel,.pattern-menu){
+  position:relative!important;inset:auto!important;top:auto!important;right:auto!important;
+  left:auto!important;bottom:auto!important;z-index:auto!important;
+  width:100%!important;height:auto!important;min-height:0!important;max-height:none!important;
+  box-sizing:border-box;display:block;margin:7px 0 0!important;
+  padding:42px 10px 11px!important;border:1px solid var(--line)!important;
+  border-radius:13px!important;background:var(--panel-bg)!important;
+  color:var(--panel-text)!important;box-shadow:none!important;overflow:visible!important;
+}
+.workspace-toolbox .workspace-toolbar .pattern-menu{padding:8px!important;display:grid;gap:4px}
+.workspace-toolbox .workspace-toolbar .pattern-menu button{min-height:44px}
+.workspace-toolbar .panel-close,.workspace-toolbar .doodle-panel-close{
+  position:absolute!important;top:2px!important;right:4px!important;
+  display:grid;place-items:center;width:40px;height:40px;border:0;border-radius:9px;
+  background:transparent;color:inherit;font-size:24px;cursor:pointer;
+}
 .workspace-toolbar .music-panel form{padding-top:4px}
 .workspace-toolbar .music-panel input{min-width:0;min-height:40px}
-.workspace-toolbar .sticker-grid{max-height:none;overflow:visible}
+.workspace-toolbar .music-results{max-height:38dvh;overflow-y:auto}
+.workspace-toolbar .sticker-library-content{padding-top:0;overflow:visible!important}
+.workspace-toolbar .sticker-tabs{flex-wrap:wrap}
 .workspace-toolbar .sticker-tabs button{min-height:40px}
 .workspace-toolbar .sticker-upload{padding:12px 6px}
+.workspace-toolbar .sticker-grid{max-height:38dvh;overflow-y:auto;scrollbar-width:thin}
+.workspace-toolbar .doodle-panel .doodle-grid{max-height:38dvh!important;overflow-y:auto!important}
+.workspace-toolbar :is(input,select,button){max-width:100%}
 .workspace button:focus-visible{outline:2px solid #9176f4;outline-offset:2px}
-@media(max-width:650px){
- .workspace-toolbar{gap:6px;padding:6px 8px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
- .workspace-toolbar>button,.workspace-toolbar :is(.music-controls,.voice-controls,.pattern-controls)>button{width:100%;padding:6px 4px!important;font-size:12px}
- .workspace-toolbar :is(.music-controls,.voice-controls,.pattern-controls){min-width:0}
- .workspace-toolbar .voice-controls{flex-direction:column;gap:2px}
- .workspace-toolbar .board-logout-bottom{margin:0}
- .workspace-toolbar :is(.music-panel,.doodle-panel,.pattern-menu){right:8px!important;width:calc(100vw - 16px)}
- .selection-toolbar{gap:6px;padding:6px 8px}
- .selection-toolbar .voice-palette{gap:6px;min-width:200px}
+
+/* The existing Lock / Unlock / Locked selection only controls remain,
+   but no longer consume a full-width horizontal row. */
+.workspace .selection-toolbar{
+  position:fixed;top:calc(78px + env(safe-area-inset-top));left:calc(12px + env(safe-area-inset-left));
+  right:auto;bottom:auto;z-index:300;box-sizing:border-box;
+  display:flex;flex-direction:column;align-items:flex-start;gap:8px;
+  width:max-content;max-width:min(325px,calc(100vw - 24px));
+  max-height:calc(100dvh - 112px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  overflow-y:auto;overscroll-behavior:contain;
+  padding:10px 12px;border:1px solid var(--line);border-radius:15px;
+  background:rgba(255,255,255,.89);color:var(--panel-text);
+  box-shadow:0 8px 25px #0002;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
 }
-@media(prefers-reduced-motion:reduce){.workspace *{scroll-behavior:auto!important}}
+.workspace-dark .selection-toolbar{background:rgba(38,36,48,.89)}
+.selection-lock{
+  min-height:42px;padding:8px 14px;border:1px solid var(--line);border-radius:10px;
+  background:var(--panel-bg);color:var(--panel-text);font:600 13px system-ui;
+  cursor:pointer;touch-action:manipulation;
+}
+.locked-selection-hint{font-size:12px;opacity:.77}
+.selection-toolbar .voice-palette{
+  position:static!important;inset:auto!important;transform:none!important;z-index:auto!important;
+  flex:1;width:100%;max-width:100%;box-sizing:border-box;min-width:0;
+  padding:0!important;background:transparent!important;border:0!important;box-shadow:none!important;
+  backdrop-filter:none!important;white-space:normal;
+}
+.selection-toolbar .voice-palette :is(button,input){min-height:36px}
 .selection-toolbar .voice-palette-swatches{flex-wrap:wrap}
 .selection-toolbar .voice-palette .voice-swatch{width:32px;min-width:32px;height:36px;flex-basis:32px}
-.selection-toolbar .voice-palette{box-shadow:none!important;border-radius:0!important}
-.selection-lock{min-height:44px;padding:8px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel-bg);color:var(--panel-text);font:600 13px system-ui;cursor:pointer}
-.locked-selection-hint{font-size:12px;opacity:.75}
-.board.board-locked-selected .excalidraw .App-menu_left{display:none!important}
-
+.selection-toolbar .voice-palette .voice-hex-form input{max-width:120px}
+/* Prevent Excalidraw's second properties strip from appearing on unlock.
+   The native canvas toolbar and custom Lock/Unlock remain intact. */
+.workspace:has(.selection-toolbar) .board .excalidraw .App-menu_left{display:none!important}
 .board.board-locked-selected .context-menu li:not([data-testid="toggleElementLock"]),
 .board.board-locked-selected .context-menu hr{display:none}
+
+/* Small frosted, translucent white logout at the very bottom center. */
+.workspace .board-logout-bottom{
+  position:fixed!important;left:50%!important;right:auto!important;
+  top:auto!important;bottom:calc(7px + env(safe-area-inset-bottom))!important;
+  transform:translateX(-50%)!important;z-index:350;
+  min-height:29px;padding:5px 12px!important;font:500 11px system-ui!important;
+  border:1px solid rgba(255,255,255,.5)!important;border-radius:999px!important;
+  background:rgba(88,80,110,.28)!important;color:#fff!important;
+  text-shadow:0 1px 2px rgba(0,0,0,.75);
+  box-shadow:0 2px 12px #0002!important;
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  opacity:.8;cursor:pointer;touch-action:manipulation;
+}
+.workspace .board-logout-bottom:hover,.workspace .board-logout-bottom:focus-visible{opacity:1;background:rgba(88,80,110,.48)!important}
+.workspace .sticker-global-error{position:fixed;top:auto;bottom:48px;z-index:500}
+
+@media(max-width:650px){
+  .workspace-toolbox{top:calc(9px + env(safe-area-inset-top));right:calc(9px + env(safe-area-inset-right))}
+  .workspace-toolbox-trigger{min-width:43px;min-height:43px;padding:8px 10px}
+  .workspace-toolbox-label{display:none}
+  .workspace-toolbox .workspace-toolbar{width:min(334px,calc(100vw - 18px));max-height:calc(100dvh - 75px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
+  .workspace .selection-toolbar{top:calc(72px + env(safe-area-inset-top));left:calc(8px + env(safe-area-inset-left));max-width:calc(100vw - 16px);padding:9px 10px}
+  .workspace-toolbar .sticker-grid{max-height:33dvh}
+}
+@media(prefers-reduced-motion:reduce){
+  .workspace *{scroll-behavior:auto!important}
+  .workspace-toolbox .workspace-toolbar{transition:none}
+}

@@ -156,3 +156,17 @@ html, body, #root { margin: 0; width: 100%; height: 100%; }
 .voice-card-light{border:0;box-shadow:inset 0 1px 0 #ffffff90,0 8px 25px #3530471e}
 .voice-card-dark{border:0;box-shadow:inset 0 1px 0 #ffffff12,0 8px 25px #0008}
 @media(max-width:520px){.voice-controls{right:10px;bottom:150px}.pattern-controls{right:10px;bottom:106px}.theme-toggle{right:10px;bottom:62px}.voice-palette{right:8px;top:56px}}
+
+/* One compact, collapsible tools menu: avoids covering the sticker library and properties sidebar. */
+.board-tools{position:absolute;top:12px;right:12px;z-index:75;font:13px system-ui;display:flex;flex-direction:column;align-items:flex-end;gap:7px;pointer-events:none}
+.board-tools>*{pointer-events:auto}
+.board-tools-toggle{border:0;border-radius:11px;padding:9px 13px;font:600 13px system-ui;cursor:pointer;box-shadow:0 2px 10px #0002}
+.board-tools-light .board-tools-toggle,.board-tools-light .board-tools-panel{background:#fffffff0;color:#252530}
+.board-tools-dark .board-tools-toggle,.board-tools-dark .board-tools-panel{background:#25252beF;color:#f6f6fa}
+.board-tools-panel{display:flex;flex-direction:column;gap:5px;padding:9px;border-radius:14px;box-shadow:0 8px 25px #0003;min-width:150px;max-height:calc(100dvh - 100px);overflow:auto;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+.board-tools-panel button{background:transparent;color:inherit;border:0;border-radius:8px;padding:9px 11px;text-align:left;cursor:pointer;font:500 13px system-ui}
+.board-tools-panel button:hover,.board-tools-patterns .selected{background:#8883}
+.board-tools-patterns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px}
+.board-tools-patterns button{font-size:11px;padding:7px}
+.voice-palette{top:auto;bottom:14px;right:14px;max-width:calc(100vw - 28px);z-index:65}
+@media(max-width:520px){.board-tools{top:8px;right:8px}.voice-palette{top:auto;bottom:12px;right:8px}}

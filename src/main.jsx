@@ -566,6 +566,7 @@ function App() {
       img.style.height=(element.height*liveZoom)+"px";
       img.style.transform=`rotate(${element.angle||0}rad) scale(${(element.scale||[1,1])[0]},${(element.scale||[1,1])[1]})`;
       img.style.opacity=String((element.opacity??100)/100);
+      img.style.borderRadius=element.roundness?.type?Math.min(32,element.width/4,element.height/4)*liveZoom+"px":"0px";
     }
     setSceneImages(old=>old.length===images.length&&old.every((e,i)=>e===images[i])?old:images);
     if(theme==="dark"){
@@ -638,6 +639,7 @@ function App() {
       return <img key={e.id} data-sticker-element={e.id} src={isGif?"/api/sticker-file?id="+encodeURIComponent(id):imageSources[e.fileId]} alt="" draggable="false" style={{
         position:"absolute",left:(e.x+viewport.x)*viewport.zoom,top:(e.y+viewport.y)*viewport.zoom,
         width:e.width*viewport.zoom,height:e.height*viewport.zoom,objectFit:"fill",filter:"none",
+        borderRadius:e.roundness?.type?Math.min(32,e.width/4,e.height/4)*viewport.zoom:0,
         transform:`rotate(${e.angle||0}rad) scale(${scale[0]},${scale[1]})`,opacity:(e.opacity??100)/100
       }}/>;
     })}</div>

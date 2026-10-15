@@ -570,6 +570,12 @@ function App() {
     setVoiceCards(old=>old.length===voices.length&&old.every((e,i)=>e===voices[i])?old:voices);
     setMusicCards(old=>old.length===musics.length&&old.every((e,i)=>e===musics[i])?old:musics);
     if (appState) {
+      const selectedIds=Object.keys(appState.selectedElementIds||{}).filter(id=>appState.selectedElementIds[id]);
+      const mediaOnly=selectedIds.length>0&&selectedIds.every(id=>{
+        const item=elements.find(e=>e.id===id);
+        return item&&!item.isDeleted&&(item.customData?.voiceNoteId||item.customData?.music?.id);
+      });
+      document.querySelector(".board")?.classList.toggle("board-media-selected",Boolean(mediaOnly));
       const selected=elements.find(e=>e.customData?.voiceNoteId&&appState.selectedElementIds?.[e.id]);
       setSelectedVoiceId(old=>old===(selected?.id||null)?old:(selected?.id||null));
       const next = { zoom: appState.zoom?.value || 1, x: appState.scrollX || 0, y: appState.scrollY || 0 };

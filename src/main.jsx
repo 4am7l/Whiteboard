@@ -194,12 +194,12 @@ function App() {
     async function flush() {
       if (busy || !loaded.current || !pending.current.size) return;
       busy = true;
-      // Keep each D1 write below the API's 500-element / 2MB limits.
+      // Keep each D1 write below the API's 2000-element / 20MB limits.
       const batch = [];
       let bytes = 15;
       for (const element of pending.current.values()) {
         const size = JSON.stringify(element).length + 1;
-        if (batch.length && (batch.length >= 200 || bytes + size > 1500000)) break;
+        if (batch.length && (batch.length >= 500 || bytes + size > 18000000)) break;
         batch.push(element);
         bytes += size;
       }

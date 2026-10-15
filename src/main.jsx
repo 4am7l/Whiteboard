@@ -99,6 +99,7 @@ function App() {
     try { return localStorage.getItem("whiteboard-pattern") || "none"; } catch { return "none"; }
   });
   const [patternMenu, setPatternMenu] = useState(false);
+  const [toolsOpen,setToolsOpen]=useState(false);
   const [viewport, setViewport] = useState({ zoom: 1, x: 0, y: 0 });
   const [stickerMenu,setStickerMenu]=useState(false);
   const [searchQuery,setSearchQuery]=useState("");
@@ -387,6 +388,26 @@ function App() {
     document.addEventListener("keydown",escape);
     return()=>{document.removeEventListener("pointerdown",dismiss);document.removeEventListener("keydown",escape)};
   },[stickerMenu,musicOpen,patternMenu]);
+  // Hide the compact tools drawer on outside taps or Escape, without touching the board.
+  useEffect(()=>{
+    if(!toolsOpen)return;
+    const outside=e=>{
+      if(e.target instanceof Element&&!e.target.closest(".workspace-toolbox")){
+        setToolsOpen(false);
+        closePanels();
+      }
+    };
+    const escape=e=>{
+      if(e.key==="Escape"){setToolsOpen(false);closePanels()}
+    };
+    document.addEventListener("pointerdown",outside);
+    document.addEventListener("keydown",escape);
+    return()=>{
+      document.removeEventListener("pointerdown",outside);
+      document.removeEventListener("keydown",escape);
+    };
+  },[toolsOpen]);
+
   async function searchGiphy(event) {
     event.preventDefault();
     if(!searchQuery.trim())return;
@@ -784,7 +805,12 @@ function App() {
   }
 
   if (!authorized) return <form className="login" onSubmit={login}><h1>Our Whiteboard ♡</h1><p>Enter our 6-digit code</p><input aria-label="6-digit code" type="password" inputMode="numeric" autoComplete="off" maxLength={6} pattern="[0-9]{6}" required value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ""))}/><button type="submit">Open board</button><p role="alert">{loginError}</p></form>;
-  return <main className={`workspace workspace-${theme}`}><header className="workspace-toolbar" aria-label="Board tools"><div className="music-controls"><button type="button" aria-expanded={musicOpen} onClick={()=>togglePanel("music")}>♫ Music</button>{musicOpen&&<section aria-label="Add music" className={"music-panel music-panel-"+theme}><button className="panel-close" type="button" onClick={()=>setMusicOpen(false)} aria-label="Close music">×</button><form onSubmit={searchMusic}><input aria-label="Song name or link" placeholder="Song name or YouTube / Spotify URL" value={musicInput} onChange={e=>setMusicInput(e.target.value)}/><button type="submit" disabled={musicBusy}>{musicBusy?"Searching…":"Search / Add"}</button></form>{musicError&&<small role="alert">{musicError}</small>}<div className="music-results">{musicResults.map(item=><div key={item.id} className="music-result">{item.thumbnail&&<img src={item.thumbnail} alt=""/>}<div><strong>{item.title}</strong><small>{item.channel}</small><div className="music-add-options"><button type="button" onClick={()=>addMusicCard("https://www.youtube.com/watch?v="+item.id,item.title,"audio",item.thumbnail,item.channel)}>Add audio</button><button type="button" onClick={()=>addMusicCard("https://www.youtube.com/watch?v="+item.id,item.title,"video",item.thumbnail,item.channel)}>Add video</button></div></div></div>)}</div><small>Choose Audio for a compact song card, or Video for the YouTube player. Some videos restrict embedding.</small></section>}</div><div className="voice-controls"><button type="button" disabled={voiceBusy} onClick={recording?stopVoice:startVoice}>{voiceBusy?"Saving…":recording?"■ Stop voice":"🎙 Voice note"}</button>{recording&&<span className="voice-live">● Recording</span>}</div><button type="button" className={`theme-toggle ${theme==="dark"?"theme-toggle--dark":"theme-toggle--light"}`} title="Change theme" onClick={toggleTheme} aria-label="Toggle dark mode">{theme==="dark"?"☀️ Light":"🌙 Dark"}</button><div className="pattern-controls"><button type="button" className={`pattern-button ${theme==="dark"?"pattern-dark":"pattern-light"}`} onClick={()=>togglePanel("background")} aria-expanded={patternMenu}>▦ Background</button>{patternMenu&&<div className={`pattern-menu ${theme==="dark"?"pattern-dark":"pattern-light"}`}>{[["none","Blank"],["lines","Horizontal lines"],["squares","Small squares"],["dots","Dots"],["graph","Graph paper"]].map(([id,label])=><button type="button" key={id} className={pattern===id?"selected":""} onClick={()=>choosePattern(id)}>{label}</button>)}</div>}</div>
+  return <main className={`workspace workspace-${theme}`}>
+    <div className={`workspace-toolbox ${toolsOpen?"is-open":""}`}>
+      <button type="button" className="workspace-toolbox-trigger" onClick={()=>{if(toolsOpen)closePanels();setToolsOpen(open=>!open)}} aria-expanded={toolsOpen} aria-controls="workspace-tools-menu" aria-label={toolsOpen?"Close tools menu":"Open tools menu"}>
+        <span aria-hidden="true">{toolsOpen?"×":"☰"}</span><span className="workspace-toolbox-label">{toolsOpen?"Close":"Tools"}</span>
+      </button>
+      <aside id="workspace-tools-menu" className="workspace-toolbar" aria-label="Board tools" aria-hidden={!toolsOpen} inert={!toolsOpen}><div className="music-controls"><button type="button" aria-expanded={musicOpen} onClick={()=>togglePanel("music")}>♫ Music</button>{musicOpen&&<section aria-label="Add music" className={"music-panel music-panel-"+theme}><button className="panel-close" type="button" onClick={()=>setMusicOpen(false)} aria-label="Close music">×</button><form onSubmit={searchMusic}><input aria-label="Song name or link" placeholder="Song name or YouTube / Spotify URL" value={musicInput} onChange={e=>setMusicInput(e.target.value)}/><button type="submit" disabled={musicBusy}>{musicBusy?"Searching…":"Search / Add"}</button></form>{musicError&&<small role="alert">{musicError}</small>}<div className="music-results">{musicResults.map(item=><div key={item.id} className="music-result">{item.thumbnail&&<img src={item.thumbnail} alt=""/>}<div><strong>{item.title}</strong><small>{item.channel}</small><div className="music-add-options"><button type="button" onClick={()=>addMusicCard("https://www.youtube.com/watch?v="+item.id,item.title,"audio",item.thumbnail,item.channel)}>Add audio</button><button type="button" onClick={()=>addMusicCard("https://www.youtube.com/watch?v="+item.id,item.title,"video",item.thumbnail,item.channel)}>Add video</button></div></div></div>)}</div><small>Choose Audio for a compact song card, or Video for the YouTube player. Some videos restrict embedding.</small></section>}</div><div className="voice-controls"><button type="button" disabled={voiceBusy} onClick={recording?stopVoice:startVoice}>{voiceBusy?"Saving…":recording?"■ Stop voice":"🎙 Voice note"}</button>{recording&&<span className="voice-live">● Recording</span>}</div><button type="button" className={`theme-toggle ${theme==="dark"?"theme-toggle--dark":"theme-toggle--light"}`} title="Change theme" onClick={toggleTheme} aria-label="Toggle dark mode">{theme==="dark"?"☀️ Light":"🌙 Dark"}</button><div className="pattern-controls"><button type="button" className={`pattern-button ${theme==="dark"?"pattern-dark":"pattern-light"}`} onClick={()=>togglePanel("background")} aria-expanded={patternMenu}>▦ Background</button>{patternMenu&&<div className={`pattern-menu ${theme==="dark"?"pattern-dark":"pattern-light"}`}>{[["none","Blank"],["lines","Horizontal lines"],["squares","Small squares"],["dots","Dots"],["graph","Graph paper"]].map(([id,label])=><button type="button" key={id} className={pattern===id?"selected":""} onClick={()=>choosePattern(id)}>{label}</button>)}</div>}</div>
     <>
     <button type="button" className="doodle-panel-trigger" onClick={()=>togglePanel("stickers")} aria-expanded={stickerMenu}>♡ Stickers</button>
     {stickerMenu&&<section className={`sticker-library-inline doodle-panel ${theme==="dark"?"pattern-dark":"pattern-light"}`}>
@@ -820,7 +846,9 @@ function App() {
       </div>
     </section>}
     </>
-<button type="button" className="board-logout-bottom" onClick={logout} title="Return to password screen" aria-label="Log out">Log out</button></header>
+</aside>
+    </div>
+    <button type="button" className="board-logout-bottom" onClick={logout} title="Return to password screen" aria-label="Log out">Log out</button>
     {stickerError&&<div className="sticker-global-error" role="alert">{stickerError}<button type="button" onClick={()=>setStickerError("")}>×</button></div>}
     {selectedBoardIds.length>0&&<div className="selection-toolbar" aria-label="Selected items"><button type="button" className="selection-lock" onClick={toggleSelectedLock} aria-label={selectionLocked?"Unlock selected items":"Lock selected items"}>{selectionLocked?"Unlock":"Lock"} ({selectedBoardIds.length})</button>{selectionLocked&&<span className="locked-selection-hint">Locked · selection only</span>}    {selectedVoiceId&&!selectionLocked&&<div className={`voice-palette voice-palette-${theme}`} aria-label="Voice note appearance"><span>Voice color</span><div className="voice-palette-swatches">{[["default","Auto"],["violet","Purple"],["blue","Blue"],["rose","Pink"],["mint","Mint"]].map(([value,label])=><button key={value} type="button" className={"voice-swatch voice-swatch-"+value} title={label} aria-label={label} onClick={()=>{setVoiceHex("");setVoiceColor(value)}}>{value==="default"?"◐":""}</button>)}</div><label className="voice-custom-picker" title="Pick a custom color">✎ <input aria-label="Pick any color" type="color" value={/^#[0-9a-fA-F]{6}$/.test(voiceHex)?voiceHex:"#9274db"} onChange={e=>{setVoiceHex(e.target.value);setVoiceColor(e.target.value)}}/></label><form className="voice-hex-form" onSubmit={e=>{e.preventDefault();if(/^#[0-9a-fA-F]{6}$/.test(voiceHex))setVoiceColor(voiceHex)}}><input aria-label="Hex color" placeholder="#9274DB" maxLength={7} value={voiceHex} onChange={e=>setVoiceHex(e.target.value)} /><button type="submit" disabled={!/^#[0-9a-fA-F]{6}$/.test(voiceHex)}>Apply</button></form></div>}
 </div>}

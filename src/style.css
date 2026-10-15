@@ -124,3 +124,22 @@ html, body, #root { margin: 0; width: 100%; height: 100%; }
 .voice-controls .voice-swatch-rose{background:#d96c9e}
 .voice-controls .voice-swatch-mint{background:#37a994}
 .voice-controls .voice-swatch:focus-visible{outline:2px solid #6b6bfa;outline-offset:2px}
+
+/* Keep voice editing controls above the general board buttons and Excalidraw UI. */
+.voice-palette{position:absolute;z-index:80;left:50%;top:76px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;max-width:calc(100vw - 24px);padding:9px 12px;border-radius:18px;border:1px solid #ffffff7a;box-shadow:0 8px 30px #0003;backdrop-filter:blur(22px) saturate(1.5);-webkit-backdrop-filter:blur(22px) saturate(1.5);font:600 12px system-ui;white-space:nowrap}
+.voice-palette-light{background:#fffffff0;color:#24242b}
+.voice-palette-dark{background:#202027ee;color:#f6f6fb;border-color:#ffffff30}
+.voice-palette .voice-swatch{flex:0 0 27px;width:27px;height:27px;padding:0;border-radius:50%;border:2px solid #ffffffa0;box-shadow:0 1px 5px #0004;cursor:pointer;color:#444}
+.voice-palette .voice-swatch-default{background:linear-gradient(90deg,#fff 50%,#25252c 50%)}
+.voice-palette .voice-swatch-violet{background:#9b78e8}
+.voice-palette .voice-swatch-blue{background:#4c91dc}
+.voice-palette .voice-swatch-rose{background:#d96c9e}
+.voice-palette .voice-swatch-mint{background:#37a994}
+.voice-palette .voice-swatch:focus-visible{outline:2px solid #8a76fa;outline-offset:2px}
+.voice-card.voice-tint-violet{background:linear-gradient(145deg,color-mix(in srgb,#9b78e8 24%,transparent),color-mix(in srgb,#9b78e8 12%,transparent)),var(--voice-base,transparent)}
+.voice-card.voice-tint-blue{background:linear-gradient(145deg,color-mix(in srgb,#4c91dc 24%,transparent),color-mix(in srgb,#4c91dc 12%,transparent)),var(--voice-base,transparent)}
+.voice-card.voice-tint-rose{background:linear-gradient(145deg,color-mix(in srgb,#d96c9e 24%,transparent),color-mix(in srgb,#d96c9e 12%,transparent)),var(--voice-base,transparent)}
+.voice-card.voice-tint-mint{background:linear-gradient(145deg,color-mix(in srgb,#37a994 24%,transparent),color-mix(in srgb,#37a994 12%,transparent)),var(--voice-base,transparent)}
+.voice-card-light{--voice-base:linear-gradient(145deg,rgba(255,255,255,.92),rgba(241,240,248,.79))}
+.voice-card-dark{--voice-base:linear-gradient(145deg,rgba(52,52,59,.92),rgba(13,13,19,.88))}
+@media(max-width:520px){.voice-palette{top:58px;gap:5px;padding:7px 8px}.voice-palette span{font-size:11px}.voice-palette .voice-swatch{flex-basis:24px;width:24px;height:24px}}

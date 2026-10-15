@@ -70,23 +70,35 @@ function MusicCard({element,theme,viewport,onMove}){
   const stop=e=>e.stopPropagation();
   const dragStart=e=>{
     if(e.button!==0||e.target.closest("input,iframe,a,audio,button"))return;
-    dragRef.current={pointerId:e.pointerId,startX:e.clientX,startY:e.clientY,x:element.x,y:element.y,moved:false};
+    dragRef.current={pointerId:e.pointerId,startX:e.clientX,startY:e.clientY,x:element.x,y:element.y,moved:false,lastSave:0};
   };
   useEffect(()=>{
+    const commit=(d,x,y)=>moveHandlerRef.current?.(element.id,d.x+(x-d.startX)/viewport.zoom,d.y+(y-d.startY)/viewport.zoom);
     const move=e=>{
       const d=dragRef.current;if(!d||e.pointerId!==d.pointerId)return;
       const dx=e.clientX-d.startX,dy=e.clientY-d.startY;
       if(!d.moved&&Math.hypot(dx,dy)<6)return;
       d.moved=true;suppressClick.current=true;
-      if(cardRef.current){cardRef.current.style.left=((d.x+dx/viewport.zoom+viewport.x)*viewport.zoom)+"px";cardRef.current.style.top=((d.y+dy/viewport.zoom+viewport.y)*viewport.zoom)+"px"}
+      if(cardRef.current){
+        cardRef.current.style.left=((d.x+dx/viewport.zoom+viewport.x)*viewport.zoom)+"px";
+        cardRef.current.style.top=((d.y+dy/viewport.zoom+viewport.y)*viewport.zoom)+"px";
+      }
+      // Persist while dragging too, so a swallowed pointerup cannot revert the position.
+      if(performance.now()-d.lastSave>140){d.lastSave=performance.now();commit(d,e.clientX,e.clientY)}
     };
     const finish=e=>{
       const d=dragRef.current;if(!d||e.pointerId!==d.pointerId)return;
       dragRef.current=null;
-      if(d.moved){moveHandlerRef.current?.(element.id,d.x+(e.clientX-d.startX)/viewport.zoom,d.y+(e.clientY-d.startY)/viewport.zoom);window.setTimeout(()=>{suppressClick.current=false},0)}
+      if(d.moved){commit(d,e.clientX,e.clientY);window.setTimeout(()=>{suppressClick.current=false},0)}
     };
-    window.addEventListener("pointermove",move,true);window.addEventListener("pointerup",finish,true);window.addEventListener("pointercancel",finish,true);
-    return()=>{window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",finish);window.removeEventListener("pointercancel",finish)};
+    window.addEventListener("pointermove",move,true);
+    window.addEventListener("pointerup",finish,true);
+    window.addEventListener("pointercancel",finish,true);
+    return()=>{
+      window.removeEventListener("pointermove",move,true);
+      window.removeEventListener("pointerup",finish,true);
+      window.removeEventListener("pointercancel",finish,true);
+    };
   },[element.id,element.x,element.y,viewport.zoom,viewport.x,viewport.y]);
   return <div className={`music-card music-card-${theme} music-glass-card ${audioMode?"music-glass-audio":"music-glass-video"}`} ref={cardRef} data-music-element={element.id} onPointerDown={e=>{stop(e);dragStart(e)}} onClickCapture={e=>{if(suppressClick.current){e.preventDefault();e.stopPropagation();suppressClick.current=false}}} onMouseDown={stop} onDoubleClick={stop} style={{left:(element.x+viewport.x)*viewport.zoom,top:(element.y+viewport.y)*viewport.zoom,width:element.width*viewport.zoom,height:element.height*viewport.zoom,transform:`rotate(${element.angle||0}rad)`,opacity:(element.opacity??100)/100}}>
     {audioMode&&youtube?<><div className="music-glass-hidden" aria-hidden="true"><div ref={mount}/></div><div className="music-glass-cover">{music.thumbnail?<img src={music.thumbnail} alt="Album artwork"/>:<div className="music-glass-art">♪</div>}<button type="button" className="music-glass-cover-play" onClick={toggle} disabled={!ready||failed} aria-label={playing?"Pause":"Play"}><svg viewBox="0 0 24 24" width="19" height="19" fill="currentColor">{playing?<path d="M6 4h4v16H6zm8 0h4v16h-4z"/>:<path d="M8 4v16l12-8z"/>}</svg></button></div><div className="music-glass-body"><div className="music-glass-title" title={music.title}>{music.title||"Music"}</div><div className="music-glass-artist">{music.channel||"YouTube"}</div><input type="range" aria-label="Song progress" min="0" max={Math.max(duration,1)} value={Math.min(elapsed,duration||1)} onChange={e=>{player.current?.seekTo?.(Number(e.target.value),true);setElapsed(Number(e.target.value))}}/><div className="music-glass-times"><span>{fmt(elapsed)}</span><span>{fmt(duration)}</span></div></div><a className="music-glass-link" href={url} target="_blank" rel="noopener noreferrer" aria-label="Open original"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 4h6v6M20 4l-9 9"/><path d="M20 13v6H5V4h6"/></svg></a>{failed&&<a className="music-glass-failure" href={url} target="_blank" rel="noopener noreferrer">Open on YouTube</a>}</>

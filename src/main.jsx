@@ -679,8 +679,13 @@ function App() {
       recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
       recorder.onerror=()=>setStickerError("Microphone recording failed");
       recorder.onstop=async()=>{
-        stream.getTracks().forEach(t=>t.stop());voiceStreamRef.current=null;
-        setRecording(false);setVoiceBusy(true);
+        stream.getTracks().forEach(t=>t.stop());
+        if(voiceStreamRef.current===stream)voiceStreamRef.current=null;
+        if(recorderRef.current===recorder)recorderRef.current=null;
+        setRecording(false);
+        // A cancelled recording is discarded locally; never upload or add it to the board.
+        if(recorder.discardRecording)return;
+        setVoiceBusy(true);
         try{
           const blob=new Blob(chunks,{type:type.split(";")[0]});
           if(!blob.size)throw Error("Recording was empty");
@@ -697,7 +702,16 @@ function App() {
   function stopVoice(){
     if(recorderRef.current?.state==="recording")recorderRef.current.stop();
   }
-  useEffect(()=>()=>{if(recorderRef.current?.state==="recording")recorderRef.current.stop();voiceStreamRef.current?.getTracks().forEach(t=>t.stop())},[]);
+  function cancelVoice(){
+    const recorder=recorderRef.current;
+    if(!recorder||recorder.state!=="recording")return;
+    // Mark as discarded BEFORE stopping; MediaRecorder always fires onstop.
+    recorder.discardRecording=true;
+    recorder.stop();
+    voiceStreamRef.current?.getTracks().forEach(track=>track.stop());
+    setRecording(false);
+  }
+  useEffect(()=>()=>{const recorder=recorderRef.current;if(recorder?.state==="recording"){recorder.discardRecording=true;recorder.stop()}voiceStreamRef.current?.getTracks().forEach(t=>t.stop())},[]);
   function toggleTheme() {
     setTheme(previous => {
       const next = previous === "dark" ? "light" : "dark";
@@ -803,7 +817,7 @@ function App() {
       <button type="button" className="workspace-toolbox-trigger" onClick={()=>{if(toolsOpen)closePanels();setToolsOpen(open=>!open)}} aria-expanded={toolsOpen} aria-controls="workspace-tools-menu" aria-label={toolsOpen?"Close tools menu":"Open tools menu"}>
         <span aria-hidden="true">{toolsOpen?"×":"☰"}</span><span className="workspace-toolbox-label">{toolsOpen?"Close":"Tools"}</span>
       </button>
-      <aside id="workspace-tools-menu" className="workspace-toolbar" aria-label="Board tools" aria-hidden={!toolsOpen} inert={!toolsOpen}><div className="music-controls"><button type="button" aria-expanded={musicOpen} onClick={()=>togglePanel("music")}>♫ Music</button>{musicOpen&&<section aria-label="Add music" className={"music-panel music-panel-"+theme}><button className="panel-close" type="button" onClick={()=>setMusicOpen(false)} aria-label="Close music">×</button><form onSubmit={searchMusic}><input aria-label="Song name or link" placeholder="Song name or YouTube / Spotify URL" value={musicInput} onChange={e=>setMusicInput(e.target.value)}/><button type="submit" disabled={musicBusy}>{musicBusy?"Searching…":"Search / Add"}</button></form>{musicError&&<small role="alert">{musicError}</small>}<div className="music-results">{musicResults.map(item=><div key={item.id} className="music-result">{item.thumbnail&&<img src={item.thumbnail} alt=""/>}<div><strong>{item.title}</strong><small>{item.channel}</small><div className="music-add-options"><button type="button" onClick={()=>addMusicCard("https://www.youtube.com/watch?v="+item.id,item.title,"audio",item.thumbnail,item.channel)}>Add audio</button><button type="button" onClick={()=>addMusicCard("https://www.youtube.com/watch?v="+item.id,item.title,"video",item.thumbnail,item.channel)}>Add video</button></div></div></div>)}</div><small>Choose Audio for a compact song card, or Video for the YouTube player. Some videos restrict embedding.</small></section>}</div><div className="voice-controls"><button type="button" disabled={voiceBusy} onClick={recording?stopVoice:startVoice}>{voiceBusy?"Saving…":recording?"■ Stop voice":"🎙 Voice note"}</button>{recording&&<span className="voice-live">● Recording</span>}</div><button type="button" className={`theme-toggle ${theme==="dark"?"theme-toggle--dark":"theme-toggle--light"}`} title="Change theme" onClick={toggleTheme} aria-label="Toggle dark mode">{theme==="dark"?"☀️ Light":"🌙 Dark"}</button><div className="pattern-controls"><button type="button" className={`pattern-button ${theme==="dark"?"pattern-dark":"pattern-light"}`} onClick={()=>togglePanel("background")} aria-expanded={patternMenu}>▦ Background</button>{patternMenu&&<div className={`pattern-menu ${theme==="dark"?"pattern-dark":"pattern-light"}`}>{[["none","Blank"],["lines","Horizontal lines"],["squares","Small squares"],["dots","Dots"],["graph","Graph paper"]].map(([id,label])=><button type="button" key={id} className={pattern===id?"selected":""} onClick={()=>choosePattern(id)}>{label}</button>)}</div>}</div>
+      <aside id="workspace-tools-menu" className="workspace-toolbar" aria-label="Board tools" aria-hidden={!toolsOpen} inert={!toolsOpen}><div className="music-controls"><button type="button" aria-expanded={musicOpen} onClick={()=>togglePanel("music")}>♫ Music</button>{musicOpen&&<section aria-label="Add music" className={"music-panel music-panel-"+theme}><button className="panel-close" type="button" onClick={()=>setMusicOpen(false)} aria-label="Close music">×</button><form onSubmit={searchMusic}><input aria-label="Song name or link" placeholder="Song name or YouTube / Spotify URL" value={musicInput} onChange={e=>setMusicInput(e.target.value)}/><button type="submit" disabled={musicBusy}>{musicBusy?"Searching…":"Search / Add"}</button></form>{musicError&&<small role="alert">{musicError}</small>}<div className="music-results">{musicResults.map(item=><div key={item.id} className="music-result">{item.thumbnail&&<img src={item.thumbnail} alt=""/>}<div><strong>{item.title}</strong><small>{item.channel}</small><div className="music-add-options"><button type="button" onClick={()=>addMusicCard("https://www.youtube.com/watch?v="+item.id,item.title,"audio",item.thumbnail,item.channel)}>Add audio</button><button type="button" onClick={()=>addMusicCard("https://www.youtube.com/watch?v="+item.id,item.title,"video",item.thumbnail,item.channel)}>Add video</button></div></div></div>)}</div><small>Choose Audio for a compact song card, or Video for the YouTube player. Some videos restrict embedding.</small></section>}</div><div className="voice-controls"><button type="button" disabled={voiceBusy} onClick={recording?stopVoice:startVoice}>{voiceBusy?"Saving…":recording?"■ Stop voice":"🎙 Voice note"}</button>{recording&&<button type="button" className="voice-cancel-recording" onClick={cancelVoice} title="Discard this recording without saving" aria-label="Discard voice recording">🗑 Cancel</button>}{recording&&<span className="voice-live">● Recording</span>}</div><button type="button" className={`theme-toggle ${theme==="dark"?"theme-toggle--dark":"theme-toggle--light"}`} title="Change theme" onClick={toggleTheme} aria-label="Toggle dark mode">{theme==="dark"?"☀️ Light":"🌙 Dark"}</button><div className="pattern-controls"><button type="button" className={`pattern-button ${theme==="dark"?"pattern-dark":"pattern-light"}`} onClick={()=>togglePanel("background")} aria-expanded={patternMenu}>▦ Background</button>{patternMenu&&<div className={`pattern-menu ${theme==="dark"?"pattern-dark":"pattern-light"}`}>{[["none","Blank"],["lines","Horizontal lines"],["squares","Small squares"],["dots","Dots"],["graph","Graph paper"]].map(([id,label])=><button type="button" key={id} className={pattern===id?"selected":""} onClick={()=>choosePattern(id)}>{label}</button>)}</div>}</div>
     <>
     <button type="button" className="doodle-panel-trigger" onClick={()=>togglePanel("stickers")} aria-expanded={stickerMenu}>♡ Stickers</button>
     {stickerMenu&&<section className={`sticker-library-inline doodle-panel ${theme==="dark"?"pattern-dark":"pattern-light"}`}>

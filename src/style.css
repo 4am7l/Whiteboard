@@ -468,3 +468,7 @@ body > .doodle-panel .doodle-grid > button > img{
   margin:auto!important;
 }
 @media(max-width:420px){body > .doodle-panel .doodle-grid{grid-auto-rows:88px!important;gap:7px!important}body > .doodle-panel .doodle-grid > button{height:88px!important;max-height:88px!important;padding:10px!important}}
+
+/* Small logout button centered at the bottom of the whiteboard */
+.board-logout-bottom{position:fixed;left:50%;bottom:12px;transform:translateX(-50%);z-index:1000;padding:5px 12px;font-size:11px;line-height:1.4;border-radius:999px;border:1px solid rgba(128,128,128,.3);background:var(--island-bg-color,rgba(255,255,255,.88));color:var(--text-primary-color,#555);opacity:.8;cursor:pointer;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.board-logout-bottom:hover{opacity:1}

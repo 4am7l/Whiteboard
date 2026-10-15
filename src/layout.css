@@ -163,9 +163,11 @@
 .appearance-lock-bar .voice-palette .voice-swatch{width:31px;min-width:31px;height:35px;flex-basis:31px}
 .appearance-lock-bar .voice-palette .voice-hex-form input{max-width:108px}
 
-/* Only one UNLOCKED regular item may display Excalidraw's native
-   appearance/color controls. Multiple selections and unselected board do not. */
-.workspace .board:not(.board-single-selected) .excalidraw .App-menu__left,
+/* Show native appearance controls for a single unlocked selected item OR
+   whenever the freehand pen is active, so pen colors and stroke widths remain editable.
+   Hide them for multi-selection and for locked/media selection. */
+.workspace .board:not(.board-single-selected):not(.board-pen-active) .excalidraw .App-menu__left,
+.workspace .board.board-multi-selected .excalidraw .App-menu__left,
 .workspace .board.board-locked-selected .excalidraw .App-menu__left,
 .workspace .board.board-media-selected .excalidraw .App-menu__left{
   display:none!important;
@@ -181,6 +183,24 @@
   margin-top:0!important;
   max-height:calc(100dvh - 175px - env(safe-area-inset-top) - env(safe-area-inset-bottom))!important;
   overflow-y:auto;
+}
+/* The pen is not a selected element: show its native color/brush-size
+   properties near the top, with no extra lock button or reserved lock gap. */
+.workspace .board.board-pen-active:not(.board-multi-selected) .excalidraw .App-menu__left{
+  position:fixed!important;
+  top:calc(72px + env(safe-area-inset-top))!important;
+  left:calc(14px + env(safe-area-inset-left))!important;
+  bottom:auto!important;
+  margin-top:0!important;
+  max-height:calc(100dvh - 96px - env(safe-area-inset-top) - env(safe-area-inset-bottom))!important;
+  overflow-y:auto;
+}
+@media(max-width:650px){
+  .workspace .board.board-pen-active:not(.board-multi-selected) .excalidraw .App-menu__left{
+    top:calc(67px + env(safe-area-inset-top))!important;
+    left:calc(9px + env(safe-area-inset-left))!important;
+    max-height:calc(100dvh - 89px - env(safe-area-inset-top) - env(safe-area-inset-bottom))!important;
+  }
 }
 /* Keep native context-menu actions including the original Lock/Unlock option. */
 

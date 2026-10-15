@@ -303,3 +303,15 @@ html, body, #root { margin: 0; width: 100%; height: 100%; }
 .music-glass-video{flex-direction:column!important;align-items:stretch!important;gap:9px!important}.music-glass-video-top{display:flex;align-items:center;justify-content:space-between;gap:9px;flex:none;min-width:0;font-size:12px;font-weight:700}.music-glass-video-top span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.music-glass-video-top a{display:flex;color:inherit}.music-glass-video iframe{flex:1!important;width:100%!important;min-height:0!important;border-radius:10px!important}
 .music-glass-video-poster{flex:1;min-height:0;width:100%;border:0;border-radius:10px;background-color:#12121b;background-size:cover;background-position:center;display:grid;place-items:center;cursor:pointer}.music-glass-video-play{width:50px;height:50px;display:grid;place-items:center;border-radius:50%;background:#ffffffd9;color:#171725;box-shadow:0 5px 20px #0005;transition:transform .16s}.music-glass-video-poster:hover .music-glass-video-play{transform:scale(1.08)}
 .music-add-options{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}.music-add-options button{margin:0!important;border-radius:8px!important;padding:7px 10px!important;font-size:11px!important}.music-add-options button:first-child{background:#514b72!important}.music-add-options button:last-child{background:#8065d7!important}
+
+/* Use Excalidraw's actual rectangle drag instead of a separate visual drag layer.
+   Only actionable music controls intercept pointer events. */
+.music-overlay .music-glass-card{pointer-events:none!important;user-select:none}
+.music-overlay .music-glass-card button,
+.music-overlay .music-glass-card a,
+.music-overlay .music-glass-card input,
+.music-overlay .music-glass-card audio,
+.music-overlay .music-glass-card iframe{pointer-events:auto!important}
+.music-overlay .music-glass-cover-play{inset:auto!important;left:50%!important;top:50%!important;transform:translate(-50%,-50%)!important;width:36px!important;height:36px!important;border-radius:50%!important;background:#10101bbd!important;opacity:1!important}
+.music-overlay .music-glass-cover-play:hover{background:#10101be8!important}
+.music-overlay .music-glass-cover img{pointer-events:none}

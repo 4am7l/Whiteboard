@@ -15,6 +15,11 @@ function App() {
   });
   const [patternMenu, setPatternMenu] = useState(false);
   const [viewport, setViewport] = useState({ zoom: 1, x: 0, y: 0 });
+  const [stickerMenu,setStickerMenu]=useState(false);
+  const [stickers,setStickers]=useState([]);
+  const [placements,setPlacements]=useState([]);
+  const [stickerError,setStickerError]=useState("");
+  const draggingSticker=useRef(null);
   const [pin, setPin] = useState("");
   const [loginError, setLoginError] = useState("");
   const [api, setApi] = useState(null);
@@ -147,6 +152,65 @@ function App() {
     };
   }, [api, authorized]);
 
+  async function loadStickers() {
+    try {
+      const r=await fetch("/api/stickers",{cache:"no-store"});
+      if(!r.ok)throw Error("Sticker storage unavailable");
+      setStickers((await r.json()).stickers);
+    }catch(e){setStickerError(e.message)}
+  }
+  useEffect(()=>{if(!authorized)return;loadStickers();},[authorized]);
+  useEffect(()=>{
+    if(!authorized)return;
+    let active=true;
+    const poll=async()=>{
+      try {const r=await fetch("/api/sticker-placements",{cache:"no-store"});if(!r.ok)return;
+        const data=await r.json();if(active&&!draggingSticker.current)setPlacements(data.placements);
+      }catch{}
+    };
+    poll();const timer=setInterval(poll,2500);
+    return()=>{active=false;clearInterval(timer)};
+  },[authorized]);
+  async function uploadSticker(event) {
+    const files=[...event.target.files];event.target.value="";
+    for(const file of files){
+      const form=new FormData();form.append("file",file);
+      try{const r=await fetch("/api/stickers",{method:"POST",body:form});
+        const data=await r.json();if(!r.ok)throw Error(data.error||"Upload failed");
+      }catch(e){setStickerError(e.message)}
+    }
+    loadStickers();
+  }
+  async function placeSticker(sticker) {
+    const state=api?.getAppState();
+    const p={id:crypto.randomUUID(),sticker_id:sticker.id,x:(window.innerWidth/2)/(state?.zoom?.value||1)-(state?.scrollX||0)-75,y:(window.innerHeight/2)/(state?.zoom?.value||1)-(state?.scrollY||0)-75,width:150};
+    setPlacements(old=>[...old,p]);
+    const r=await fetch("/api/sticker-placements",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});
+    if(!r.ok)setStickerError("Run sticker-schema.sql in D1 to enable placements");
+    setStickerMenu(false);
+  }
+  async function deletePlacement(id) {
+    setPlacements(old=>old.filter(p=>p.id!==id));
+    await fetch("/api/sticker-placements?id="+encodeURIComponent(id),{method:"DELETE"});
+  }
+  function startStickerDrag(event,p) {
+    if(event.button!==0)return;
+    event.preventDefault();event.currentTarget.setPointerCapture(event.pointerId);
+    draggingSticker.current={id:p.id,startX:event.clientX,startY:event.clientY,x:p.x,y:p.y};
+  }
+  function moveSticker(event) {
+    const drag=draggingSticker.current;if(!drag)return;
+    const zoom=viewport.zoom||1;
+    setPlacements(old=>old.map(p=>p.id===drag.id?{...p,x:drag.x+(event.clientX-drag.startX)/zoom,y:drag.y+(event.clientY-drag.startY)/zoom}:p));
+  }
+  async function endStickerDrag(event) {
+    const drag=draggingSticker.current;if(!drag)return;
+    const zoom=viewport.zoom||1;
+    const p=placements.find(p=>p.id===drag.id);
+    const next=p?{...p,x:drag.x+(event.clientX-drag.startX)/zoom,y:drag.y+(event.clientY-drag.startY)/zoom}:null;
+    draggingSticker.current=null;
+    if(next)await fetch("/api/sticker-placements",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(next)});
+  }
   function toggleTheme() {
     setTheme(previous => {
       const next = previous === "dark" ? "light" : "dark";
@@ -183,7 +247,22 @@ function App() {
           <button type="button" key={id} className={pattern === id ? "selected" : ""} onClick={() => choosePattern(id)}>{pattern === id ? "✓ " : ""}{label}</button>)}
       </div>}
     </div>
+    <div className="sticker-controls">
+      <button type="button" className={`sticker-trigger ${theme==="dark"?"pattern-dark":"pattern-light"}`} onClick={()=>setStickerMenu(v=>!v)}>♡ Stickers</button>
+      {stickerMenu&&<div className={`sticker-library ${theme==="dark"?"pattern-dark":"pattern-light"}`}>
+        <strong>Our Stickers</strong>
+        <label className="sticker-upload">＋ Upload PNG / JPG / WebP / GIF<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple onChange={uploadSticker} hidden/></label>
+        <div className="sticker-grid">{stickers.map(sticker=><button type="button" key={sticker.id} title={sticker.name} onClick={()=>placeSticker(sticker)}><img src={sticker.url} alt={sticker.name}/></button>)}</div>
+        {stickerError&&<small role="alert">{stickerError}</small>}
+      </div>}
+    </div>
     <Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} name="Our Whiteboard" />
+    <div className="placed-stickers">{placements.map(p=>{
+      const sticker=stickers.find(s=>s.id===p.sticker_id);if(!sticker)return null;
+      return <div key={p.id} className="placed-sticker" style={{left:(p.x+viewport.x)*viewport.zoom,top:(p.y+viewport.y)*viewport.zoom,width:p.width*viewport.zoom}} onPointerDown={e=>startStickerDrag(e,p)} onPointerMove={moveSticker} onPointerUp={endStickerDrag} onPointerCancel={endStickerDrag}>
+        <img draggable="false" src={sticker.url} alt={sticker.name}/><button type="button" aria-label="Remove sticker from board" title="Remove sticker" onPointerDown={e=>e.stopPropagation()} onClick={()=>deletePlacement(p.id)}>×</button>
+      </div>;
+    })}</div>
     {pattern !== "none" && <div className={`board-pattern pattern-${pattern} pattern-${theme}`} aria-hidden="true" style={{
       "--pattern-size": `${(pattern === "graph" ? 10 : 20) * viewport.zoom}px`,
       "--pattern-x": `${viewport.x * viewport.zoom}px`,

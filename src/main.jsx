@@ -10,6 +10,11 @@ function App() {
     try { return localStorage.getItem("whiteboard-theme") === "dark" ? "dark" : "light"; }
     catch { return "light"; }
   });
+  const [pattern, setPattern] = useState(() => {
+    try { return localStorage.getItem("whiteboard-pattern") || "none"; } catch { return "none"; }
+  });
+  const [patternMenu, setPatternMenu] = useState(false);
+  const [viewport, setViewport] = useState({ zoom: 1, x: 0, y: 0 });
   const [pin, setPin] = useState("");
   const [loginError, setLoginError] = useState("");
   const [api, setApi] = useState(null);
@@ -150,7 +155,17 @@ function App() {
     });
   }
 
-  function onChange(elements) {
+  function choosePattern(next) {
+    setPattern(next);
+    setPatternMenu(false);
+    try { localStorage.setItem("whiteboard-pattern", next); } catch {}
+  }
+
+  function onChange(elements, appState) {
+    if (appState) {
+      const next = { zoom: appState.zoom?.value || 1, x: appState.scrollX || 0, y: appState.scrollY || 0 };
+      setViewport(old => old.zoom === next.zoom && old.x === next.x && old.y === next.y ? old : next);
+    }
     if (!loaded.current || applying.current) return;
     for (const element of elements) {
       if ((element.version ?? 0) > (known.current.get(element.id) ?? -1)) {
@@ -161,6 +176,18 @@ function App() {
   }
 
   if (!authorized) return <form className="login" onSubmit={login}><h1>Our Whiteboard ♡</h1><p>Enter our 6-digit code</p><input aria-label="6-digit code" type="password" inputMode="numeric" autoComplete="off" maxLength={6} pattern="[0-9]{6}" required value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ""))}/><button type="submit">Open board</button><p role="alert">{loginError}</p></form>;
-  return <main className="board"><button type="button" className={`theme-toggle ${theme === "dark" ? "theme-toggle--dark" : "theme-toggle--light"}`} title="Change theme" onClick={toggleTheme} aria-label="Toggle dark mode">{theme === "dark" ? "☀️ Light" : "🌙 Dark"}</button><Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} name="Our Whiteboard" /></main>;
+  return <main className="board"><button type="button" className={`theme-toggle ${theme === "dark" ? "theme-toggle--dark" : "theme-toggle--light"}`} title="Change theme" onClick={toggleTheme} aria-label="Toggle dark mode">{theme === "dark" ? "☀️ Light" : "🌙 Dark"}</button><div className="pattern-controls">
+      <button type="button" className={`pattern-button ${theme === "dark" ? "pattern-dark" : "pattern-light"}`} onClick={() => setPatternMenu(v => !v)} aria-expanded={patternMenu} aria-label="Board background">▦ Background</button>
+      {patternMenu && <div className={`pattern-menu ${theme === "dark" ? "pattern-dark" : "pattern-light"}`}>
+        {[["none", "Blank"], ["lines", "Horizontal lines"], ["squares", "Small squares"], ["dots", "Small dots"], ["graph", "Graph paper"]].map(([id, label]) =>
+          <button type="button" key={id} className={pattern === id ? "selected" : ""} onClick={() => choosePattern(id)}>{pattern === id ? "✓ " : ""}{label}</button>)}
+      </div>}
+    </div>
+    <Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} name="Our Whiteboard" />
+    {pattern !== "none" && <div className={`board-pattern pattern-${pattern} pattern-${theme}`} aria-hidden="true" style={{
+      "--pattern-size": `${(pattern === "graph" ? 10 : 20) * viewport.zoom}px`,
+      "--pattern-x": `${viewport.x * viewport.zoom}px`,
+      "--pattern-y": `${viewport.y * viewport.zoom}px`
+    }} />}</main>;
 }
 createRoot(document.getElementById("root")).render(<App />);

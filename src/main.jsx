@@ -98,6 +98,7 @@ function App() {
   const [stickerError,setStickerError]=useState("");
   const draggingSticker=useRef(null);
   const imageLoads=useRef(new Map());
+  const imageUploads=useRef(new Set());
   const [sceneImages,setSceneImages]=useState([]);
   const [voiceCards,setVoiceCards]=useState([]);
   const [musicCards,setMusicCards]=useState([]);
@@ -163,7 +164,7 @@ function App() {
           }
           known.current.set(element.id, Math.max(known.current.get(element.id) ?? -1, incomingVersion));
         }
-        await Promise.all(elements.filter(e=>e.type==="image"&&!e.isDeleted&&String(e.fileId||"").startsWith("sticker:")).map(e=>loadImageFile(e.fileId).catch(()=>{})));
+        await Promise.all(elements.filter(e=>e.type==="image"&&!e.isDeleted).map(e=>String(e.fileId||"").startsWith("sticker:")?loadImageFile(e.fileId).catch(()=>{}):restoreBoardImage(e.fileId).catch(()=>{})));
         if (changed) {
           applying.current = true;
           apiRef.current.updateScene({ elements: [...merged.values()] });
@@ -342,6 +343,31 @@ function App() {
     }
     loadStickers();
   }
+  async function restoreBoardImage(fileId){
+    if(!fileId||String(fileId).startsWith("sticker:")||apiRef.current?.getFiles()?.[fileId])return;
+    if(imageLoads.current.has(fileId))return imageLoads.current.get(fileId);
+    const task=(async()=>{
+      const response=await fetch("/api/board-image?id="+encodeURIComponent(fileId),{cache:"no-store"});
+      if(!response.ok)throw Error("Saved image unavailable");
+      const blob=await response.blob();
+      const dataURL=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(blob)});
+      apiRef.current?.addFiles([{id:fileId,dataURL,mimeType:blob.type||"image/png",created:Date.now(),lastRetrieved:Date.now()}]);
+    })();
+    imageLoads.current.set(fileId,task);
+    try{await task}finally{imageLoads.current.delete(fileId)}
+  }
+  function persistBoardImages(elements,files){
+    if(!files)return;
+    for(const element of elements){
+      if(element.isDeleted||element.type!=="image"||!element.fileId||String(element.fileId).startsWith("sticker:"))continue;
+      const file=files[element.fileId];
+      if(!file?.dataURL||imageUploads.current.has(element.fileId))continue;
+      imageUploads.current.add(element.fileId);
+      fetch("/api/board-image",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:element.fileId,dataURL:file.dataURL})})
+        .then(response=>{if(!response.ok)throw Error("Image upload failed")})
+        .catch(()=>{imageUploads.current.delete(element.fileId);setStatus("Image save failed — retry by editing the board")});
+    }
+  }
   async function loadImageFile(fileId) {
     if(!apiRef.current||!fileId?.startsWith("sticker:"))return;
     if(apiRef.current.getFiles()[fileId])return;
@@ -490,7 +516,8 @@ function App() {
     try { localStorage.setItem("whiteboard-pattern", next); } catch {}
   }
 
-  function onChange(elements, appState) {
+  function onChange(elements, appState, files) {
+    persistBoardImages(elements,files);
     const images=elements.filter(e=>e.type==="image"&&!e.isDeleted&&String(e.fileId||"").startsWith("sticker:"));
     const voices=elements.filter(e=>!e.isDeleted&&e.customData?.voiceNoteId);
     const musics=elements.filter(e=>!e.isDeleted&&e.customData?.music?.id);

@@ -272,7 +272,7 @@ function App() {
       const blob=await r.blob();
       const source=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(blob)});
       // Excalidraw canvas images do not reliably accept GIF binaries.
-      // Use a PNG frame for native selection/rotation/resize, with the GIF animated above it.
+      // Use a transparent PNG as the native selection/resize surface. The animated GIF is the only visible layer.
       let dataURL=source,mimeType=blob.type||"image/png";
       if(mimeType==="image/gif"){
         dataURL=await new Promise((resolve,reject)=>{
@@ -281,7 +281,7 @@ function App() {
             try{
               const canvas=document.createElement("canvas");
               canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;
-              canvas.getContext("2d").drawImage(image,0,0);
+              // Intentionally leave the PNG transparent to avoid a frozen duplicate behind the GIF.
               resolve(canvas.toDataURL("image/png"));
             }catch(e){reject(e)}
           };
@@ -335,6 +335,18 @@ function App() {
 
   function onChange(elements, appState) {
     const images=elements.filter(e=>e.type==="image"&&!e.isDeleted&&String(e.fileId||"").startsWith("sticker:"));
+    const liveZoom=appState?.zoom?.value||1,liveX=appState?.scrollX||0,liveY=appState?.scrollY||0;
+    // Update GIF geometry immediately, without waiting for a React render while dragging.
+    for(const element of images){
+      const img=document.querySelector(`.animated-stickers img[data-sticker-element="${element.id}"]`);
+      if(!img)continue;
+      img.style.left=((element.x+liveX)*liveZoom)+"px";
+      img.style.top=((element.y+liveY)*liveZoom)+"px";
+      img.style.width=(element.width*liveZoom)+"px";
+      img.style.height=(element.height*liveZoom)+"px";
+      img.style.transform=`rotate(${element.angle||0}rad) scale(${(element.scale||[1,1])[0]},${(element.scale||[1,1])[1]})`;
+      img.style.opacity=String((element.opacity??100)/100);
+    }
     setSceneImages(old=>old.length===images.length&&old.every((e,i)=>e===images[i])?old:images);
     if (appState) {
       const next = { zoom: appState.zoom?.value || 1, x: appState.scrollX || 0, y: appState.scrollY || 0 };
@@ -384,7 +396,7 @@ function App() {
     <div className="animated-stickers" aria-hidden="true">{sceneImages.filter(e=>e.fileId.endsWith(".gif")).map(e=>{
       const id=e.fileId.slice(8);
       const scale=e.scale||[1,1];
-      return <img key={e.id} src={"/api/sticker-file?id="+encodeURIComponent(id)} alt="" draggable="false" style={{
+      return <img key={e.id} data-sticker-element={e.id} src={"/api/sticker-file?id="+encodeURIComponent(id)} alt="" draggable="false" style={{
         position:"absolute",left:(e.x+viewport.x)*viewport.zoom,top:(e.y+viewport.y)*viewport.zoom,
         width:e.width*viewport.zoom,height:e.height*viewport.zoom,
         transform:`rotate(${e.angle||0}rad) scale(${scale[0]},${scale[1]})`,opacity:(e.opacity??100)/100

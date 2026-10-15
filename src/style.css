@@ -170,3 +170,13 @@ html, body, #root { margin: 0; width: 100%; height: 100%; }
 .board-tools-patterns button{font-size:11px;padding:7px}
 .voice-palette{top:auto;bottom:14px;right:14px;max-width:calc(100vw - 28px);z-index:65}
 @media(max-width:520px){.board-tools{top:8px;right:8px}.voice-palette{top:auto;bottom:12px;right:8px}}
+
+/* Restore the original left-hand button positions; opened menus must overlay them. */
+.voice-controls{left:14px;right:auto;bottom:200px;z-index:24}
+.pattern-controls{left:14px;right:auto;bottom:112px;z-index:24}
+.theme-toggle{left:14px;right:auto;bottom:68px;z-index:24}
+.pattern-menu{left:0;right:auto;bottom:38px;z-index:90}
+.pattern-controls:has(.pattern-menu){z-index:90}
+.sticker-library-inline{position:relative;z-index:95}
+.sticker-library-content{position:relative;z-index:96}
+.voice-palette{z-index:100;bottom:14px;right:14px}

@@ -373,7 +373,7 @@ function App() {
       const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
       const type=["audio/webm;codecs=opus","audio/webm","audio/mp4","audio/ogg"].find(t=>MediaRecorder.isTypeSupported(t));
       if(!type){stream.getTracks().forEach(t=>t.stop());throw Error("No supported recording format")}
-      const recorder=new MediaRecorder(stream,{mimeType:type});
+      const recorder=new MediaRecorder(stream,{mimeType:type,audioBitsPerSecond:256000});
       const chunks=[];
       recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
       recorder.onerror=()=>setStickerError("Microphone recording failed");

@@ -166,3 +166,24 @@
   .workspace *{scroll-behavior:auto!important}
   .workspace-toolbox .workspace-toolbar{transition:none}
 }
+
+/* A clear discard action for accidental microphone recordings. */
+.workspace .workspace-toolbar .voice-controls > .voice-cancel-recording{
+  flex:0 1 auto;min-width:92px!important;min-height:44px!important;
+  border-color:rgba(210,75,85,.42)!important;
+  background:rgba(221,83,94,.11)!important;
+  color:#a82c40!important;
+  justify-content:center!important;
+  white-space:nowrap;
+}
+.workspace-dark .workspace-toolbar .voice-controls > .voice-cancel-recording{
+  background:rgba(235,100,112,.15)!important;
+  color:#ffb3bd!important;
+}
+.workspace .workspace-toolbar .voice-controls > .voice-cancel-recording:hover{
+  background:rgba(221,83,94,.23)!important;
+}
+@media(max-width:360px){
+  .workspace .workspace-toolbar .voice-controls > .voice-cancel-recording{min-width:80px!important;padding:9px 10px!important}
+  .workspace .workspace-toolbar .voice-controls > button:first-child{min-width:110px}
+}

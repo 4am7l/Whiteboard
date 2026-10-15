@@ -41,3 +41,15 @@ html, body, #root { margin: 0; width: 100%; height: 100%; }
 .placed-sticker img {display:block;width:100%;height:auto;pointer-events:none}
 .placed-sticker>button {position:absolute;top:-12px;right:-12px;border:0;border-radius:50%;width:24px;height:24px;background:#26262b;color:white;cursor:pointer;opacity:0}
 .placed-sticker:hover>button,.placed-sticker:focus-within>button {opacity:1}
+
+/* Keep Excalidraw's local library, but don't link out to community libraries. */
+.excalidraw a[href*="libraries.excalidraw.com"], .excalidraw a[href*="excalidraw.com/libraries"], .excalidraw a[href*="excalidraw.com/#library"] {display:none!important}
+.sticker-library-inline {border-top:1px solid #8884;padding:8px;display:block;font:13px system-ui;max-height:48vh;overflow:auto}
+.sticker-library-inline.pattern-dark {background:#232329;color:#f3f3f5}
+.sticker-library-inline.pattern-light {background:white;color:#25252b}
+.sticker-section-toggle {width:100%;padding:9px;text-align:left;border:1px solid #8885;border-radius:8px;background:transparent;color:inherit;cursor:pointer}
+.sticker-library-content {display:grid;gap:10px;padding-top:10px}
+.sticker-search {display:grid;grid-template-columns:1fr auto;gap:5px}
+.sticker-search input {grid-column:1/-1;min-width:0;border:1px solid #8887;border-radius:6px;padding:8px;background:transparent;color:inherit}
+.sticker-search select,.sticker-search button {padding:7px;border:1px solid #8887;border-radius:6px;background:transparent;color:inherit;cursor:pointer}
+.sticker-library-inline .sticker-grid {max-height:190px;overflow:auto}

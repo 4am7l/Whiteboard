@@ -39,7 +39,7 @@ function parseMusicLink(raw){
 }
 function MusicCard({element,theme,viewport,onMove,onResize}){
   const music=element.customData.music;
-  const [mode,setMode]=useState("audio"),[playing,setPlaying]=useState(false),[time,setTime]=useState(0),[duration,setDuration]=useState(0);
+  const [mode,setMode]=useState("audio"),[playing,setPlaying]=useState(false),[time,setTime]=useState(0),[duration,setDuration]=useState(0),[playerStatus,setPlayerStatus]=useState("loading");
   const mount=useRef(null),instance=useRef(null),gesture=useRef(null);
   const youtube=music.provider==="youtube";
   useEffect(()=>{
@@ -54,8 +54,8 @@ function MusicCard({element,theme,viewport,onMove,onResize}){
       instance.current=p;
       p.on("play",()=>setPlaying(true));p.on("pause",()=>setPlaying(false));
       p.on("timeupdate",()=>{setTime(p.currentTime||0);setDuration(p.duration||0)});
-      p.on("ready",()=>setDuration(p.duration||0));
-    }).catch(err=>console.error("Plyr initialization failed",err));
+      p.on("ready",()=>{setPlayerStatus("ready");setDuration(p.duration||0)});p.on("error",()=>setPlayerStatus("error"));
+    }).catch(err=>{setPlayerStatus("error");console.error("Plyr initialization failed",err)});
     return()=>{disposed=true;try{instance.current?.destroy()}catch{}instance.current=null;if(mount.current?.contains(host))mount.current.removeChild(host)};
   },[youtube,music.id]);
   const fmt=t=>Number.isFinite(t)?Math.floor(t/60)+":"+String(Math.floor(t%60)).padStart(2,"0"):"0:00";
@@ -63,10 +63,11 @@ function MusicCard({element,theme,viewport,onMove,onResize}){
   const end=e=>{const g=gesture.current;if(!g)return;gesture.current=null;if(g.kind==="move")onMove(element.id,g.ox+(e.clientX-g.x)/viewport.zoom,g.oy+(e.clientY-g.y)/viewport.zoom)};
   const resizeStart=e=>{e.preventDefault();e.stopPropagation();gesture.current={kind:"resize",x:e.clientX,y:e.clientY,w:element.width,h:element.height};e.currentTarget.setPointerCapture(e.pointerId)};
   const resizeEnd=e=>{const g=gesture.current;if(!g||g.kind!=="resize")return;gesture.current=null;onResize(element.id,Math.max(280,g.w+(e.clientX-g.x)/viewport.zoom),Math.max(220,g.h+(e.clientY-g.y)/viewport.zoom))};
+  const isolate=e=>e.stopPropagation();
   const url=youtube?"https://www.youtube.com/watch?v="+music.id:music.provider==="spotify"?"https://open.spotify.com/track/"+music.id:music.url;
-  return <div className={`music-card music-card-${theme} music-plyr-card music-plyr-${mode}`} data-music-element={element.id} style={{left:(element.x+viewport.x)*viewport.zoom,top:(element.y+viewport.y)*viewport.zoom,width:element.width*viewport.zoom,height:element.height*viewport.zoom,transform:`rotate(${element.angle||0}rad)`,opacity:(element.opacity??100)/100}}>
+  return <div className={`music-card music-card-${theme} music-plyr-card music-plyr-${mode}`} data-music-element={element.id} onPointerDown={isolate} onPointerMove={isolate} onPointerUp={isolate} onMouseDown={isolate} onTouchStart={isolate} onDoubleClick={isolate} style={{left:(element.x+viewport.x)*viewport.zoom,top:(element.y+viewport.y)*viewport.zoom,width:element.width*viewport.zoom,height:element.height*viewport.zoom,transform:`rotate(${element.angle||0}rad)`,opacity:(element.opacity??100)/100}}>
     <div className="music-plyr-header" onPointerDown={begin} onPointerUp={end} onPointerCancel={()=>gesture.current=null}><span className="music-plyr-drag">⠿</span><span className="music-plyr-name" title={music.title}>{music.title||"Music"}</span><div className="music-plyr-switch"><button type="button" className={mode==="audio"?"on":""} onClick={()=>setMode("audio")}>♫ Song</button><button type="button" className={mode==="video"?"on":""} onClick={()=>setMode("video")}>▣ Video</button></div><a href={url} target="_blank" rel="noopener noreferrer" title="Open original">↗</a></div>
-    {youtube?<><div className={`music-plyr-video ${mode==="audio"?"music-plyr-video-audio":""}`} onPointerDown={e=>e.stopPropagation()}><div ref={mount}/></div>
+    {youtube?<><div className={`music-plyr-video ${mode==="audio"?"music-plyr-video-audio":""}`} onPointerDown={e=>e.stopPropagation()}><div ref={mount}/>{playerStatus!=="ready"&&<div className="music-plyr-status">{playerStatus==="error"?"Video player unavailable":"Loading video player…"}</div>}</div>
       {mode==="audio"&&<div className="music-plyr-song" onPointerDown={e=>e.stopPropagation()}><div className="music-plyr-cover">{music.thumbnail?<img src={music.thumbnail} alt="Cover"/>:"♫"}</div><div className="music-plyr-track"><strong>{music.title||"Song"}</strong><small>{music.channel||"YouTube Music"}</small></div><button type="button" className="music-plyr-play" onClick={()=>instance.current?.togglePlay()}>{playing?"Ⅱ":"▶"}</button></div>}
       {mode==="audio"&&<div className="music-plyr-audio-controls" onPointerDown={e=>e.stopPropagation()}><input aria-label="Seek" type="range" min="0" max={Math.max(duration,1)} value={Math.min(time,duration||1)} onChange={e=>{if(instance.current)instance.current.currentTime=Number(e.target.value)}}/><span>{fmt(time)} / {fmt(duration)}</span><label>◖ <input aria-label="Volume" type="range" min="0" max="1" step=".01" defaultValue=".8" onChange={e=>{if(instance.current)instance.current.volume=Number(e.target.value)}}/></label></div>}
     </>:<div className="music-plyr-fallback" onPointerDown={e=>e.stopPropagation()}><iframe title="Music" src={music.provider==="spotify"?"https://open.spotify.com/embed/track/"+music.id:music.url} allow="autoplay;encrypted-media;fullscreen;picture-in-picture"/></div>}

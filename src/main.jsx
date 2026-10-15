@@ -100,6 +100,7 @@ function App() {
   const imageLoads=useRef(new Map());
   const imageUploads=useRef(new Set());
   const [sceneImages,setSceneImages]=useState([]);
+  const [imageSources,setImageSources]=useState({});
   const [voiceCards,setVoiceCards]=useState([]);
   const [musicCards,setMusicCards]=useState([]);
   const [musicOpen,setMusicOpen]=useState(false);
@@ -543,7 +544,7 @@ function App() {
 
   function onChange(elements, appState, files) {
     persistBoardImages(elements,files);
-    const images=elements.filter(e=>e.type==="image"&&!e.isDeleted&&String(e.fileId||"").startsWith("sticker:"));
+    const images=elements.filter(e=>e.type==="image"&&!e.isDeleted&&e.fileId);
     const voices=elements.filter(e=>!e.isDeleted&&e.customData?.voiceNoteId);
     const musics=elements.filter(e=>!e.isDeleted&&e.customData?.music?.id);
     const liveZoom=appState?.zoom?.value||1,liveX=appState?.scrollX||0,liveY=appState?.scrollY||0;
@@ -567,6 +568,18 @@ function App() {
       img.style.opacity=String((element.opacity??100)/100);
     }
     setSceneImages(old=>old.length===images.length&&old.every((e,i)=>e===images[i])?old:images);
+    if(theme==="dark"){
+      const available=apiRef.current?.getFiles?.()||files||{};
+      setImageSources(old=>{
+        let next=null;
+        for(const e of images){
+          if(String(e.fileId).endsWith(".gif")||old[e.fileId])continue;
+          const source=available[e.fileId]?.dataURL;
+          if(source){if(!next)next={...old};next[e.fileId]=source}
+        }
+        return next||old;
+      });
+    }
     setVoiceCards(old=>old.length===voices.length&&old.every((e,i)=>e===voices[i])?old:voices);
     setMusicCards(old=>old.length===musics.length&&old.every((e,i)=>e===musics[i])?old:musics);
     if (appState) {
@@ -618,12 +631,13 @@ function App() {
     {selectedVoiceId&&<div className={`voice-palette voice-palette-${theme}`} aria-label="Voice note appearance"><span>Voice color</span><div className="voice-palette-swatches">{[["default","Auto"],["violet","Purple"],["blue","Blue"],["rose","Pink"],["mint","Mint"]].map(([value,label])=><button key={value} type="button" className={"voice-swatch voice-swatch-"+value} title={label} aria-label={label} onClick={()=>{setVoiceHex("");setVoiceColor(value)}}>{value==="default"?"◐":""}</button>)}</div><label className="voice-custom-picker" title="Pick a custom color">✎ <input aria-label="Pick any color" type="color" value={/^#[0-9a-fA-F]{6}$/.test(voiceHex)?voiceHex:"#9274db"} onChange={e=>{setVoiceHex(e.target.value);setVoiceColor(e.target.value)}}/></label><form className="voice-hex-form" onSubmit={e=>{e.preventDefault();if(/^#[0-9a-fA-F]{6}$/.test(voiceHex))setVoiceColor(voiceHex)}}><input aria-label="Hex color" placeholder="#9274DB" maxLength={7} value={voiceHex} onChange={e=>setVoiceHex(e.target.value)} /><button type="submit" disabled={!/^#[0-9a-fA-F]{6}$/.test(voiceHex)}>Apply</button></form></div>}
     <Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} name="Our Whiteboard" />
     <div className="voice-overlay">{voiceCards.map(e=><VoiceNoteCard key={e.id} element={e} theme={theme} viewport={viewport}/>)}</div><div className="music-overlay">{musicCards.map(e=><MusicCard key={e.id} element={e} theme={theme} viewport={viewport}/>)}</div>
-    <div className="animated-stickers" aria-hidden="true">{sceneImages.filter(e=>e.fileId.endsWith(".gif")).map(e=>{
-      const id=e.fileId.slice(8);
+    <div className="animated-stickers" aria-hidden="true">{sceneImages.filter(e=>String(e.fileId).endsWith(".gif")||(theme==="dark"&&imageSources[e.fileId])).map(e=>{
+      const isGif=String(e.fileId).endsWith(".gif");
+      const id=isGif?e.fileId.slice(8):null;
       const scale=e.scale||[1,1];
-      return <img key={e.id} data-sticker-element={e.id} src={"/api/sticker-file?id="+encodeURIComponent(id)} alt="" draggable="false" style={{
+      return <img key={e.id} data-sticker-element={e.id} src={isGif?"/api/sticker-file?id="+encodeURIComponent(id):imageSources[e.fileId]} alt="" draggable="false" style={{
         position:"absolute",left:(e.x+viewport.x)*viewport.zoom,top:(e.y+viewport.y)*viewport.zoom,
-        width:e.width*viewport.zoom,height:e.height*viewport.zoom,
+        width:e.width*viewport.zoom,height:e.height*viewport.zoom,objectFit:"fill",filter:"none",
         transform:`rotate(${e.angle||0}rad) scale(${scale[0]},${scale[1]})`,opacity:(e.opacity??100)/100
       }}/>;
     })}</div>

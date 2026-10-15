@@ -165,15 +165,15 @@
 
 /* Only one UNLOCKED regular item may display Excalidraw's native
    appearance/color controls. Multiple selections and unselected board do not. */
-.workspace .board:not(.board-single-selected) .excalidraw .App-menu_left,
-.workspace .board.board-locked-selected .excalidraw .App-menu_left,
-.workspace .board.board-media-selected .excalidraw .App-menu_left{
+.workspace .board:not(.board-single-selected) .excalidraw .App-menu__left,
+.workspace .board.board-locked-selected .excalidraw .App-menu__left,
+.workspace .board.board-media-selected .excalidraw .App-menu__left{
   display:none!important;
 }
 /* Two Lock controls are intentional: keep the native right-click menu Lock/Unlock
    alongside our always-visible selection button.
    Put the native appearance panel BELOW the top lock card, not under it. */
-.workspace .board.board-single-selected:not(.board-locked-selected):not(.board-media-selected) .excalidraw .App-menu_left{
+.workspace .board.board-single-selected:not(.board-locked-selected):not(.board-media-selected) .excalidraw .App-menu__left{
   position:fixed!important;
   top:calc(151px + env(safe-area-inset-top))!important;
   left:calc(14px + env(safe-area-inset-left))!important;
@@ -221,7 +221,7 @@
   .workspace-toolbox-label{display:none}
   .workspace-toolbox .workspace-toolbar{width:min(334px,calc(100vw - 18px));max-height:calc(100dvh - 75px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
   .workspace .appearance-lock-bar{top:calc(67px + env(safe-area-inset-top));left:calc(9px + env(safe-area-inset-left));max-width:calc(100vw - 18px)}
-  .workspace .board.board-single-selected:not(.board-locked-selected):not(.board-media-selected) .excalidraw .App-menu_left{top:calc(145px + env(safe-area-inset-top))!important;left:calc(9px + env(safe-area-inset-left))!important;max-height:calc(100dvh - 167px - env(safe-area-inset-top) - env(safe-area-inset-bottom))!important}
+  .workspace .board.board-single-selected:not(.board-locked-selected):not(.board-media-selected) .excalidraw .App-menu__left{top:calc(145px + env(safe-area-inset-top))!important;left:calc(9px + env(safe-area-inset-left))!important;max-height:calc(100dvh - 167px - env(safe-area-inset-top) - env(safe-area-inset-bottom))!important}
   .workspace-toolbar .sticker-grid{max-height:33dvh}
 }
 @media(prefers-reduced-motion:reduce){

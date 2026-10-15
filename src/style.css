@@ -24,3 +24,20 @@ html, body, #root { margin: 0; width: 100%; height: 100%; }
 .pattern-menu button:hover, .pattern-menu button.selected { background: #8883; }
 .pattern-controls .pattern-dark { background: #232329; color: #f3f3f5; }
 .pattern-controls .pattern-light { background: #fff; color: #25252b; }
+
+.sticker-controls {position:absolute;z-index:35;left:14px;bottom:156px;font:13px system-ui}
+.sticker-trigger {padding:7px 11px;border:1px solid #8886;border-radius:8px;cursor:pointer}
+.sticker-controls .pattern-dark,.sticker-library.pattern-dark{background:#232329;color:#f3f3f5}
+.sticker-controls .pattern-light,.sticker-library.pattern-light{background:white;color:#25252b}
+.sticker-library {position:absolute;bottom:40px;left:0;width:270px;max-height:350px;overflow:auto;padding:12px;border:1px solid #8886;border-radius:10px;box-shadow:0 4px 18px #0003;display:grid;gap:10px}
+.sticker-upload {display:block;text-align:center;padding:9px 4px;border:1px dashed #888;border-radius:7px;cursor:pointer}
+.sticker-grid {display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.sticker-grid button {border:1px solid #8884;border-radius:7px;background:transparent;aspect-ratio:1;cursor:pointer;overflow:hidden;padding:3px}
+.sticker-grid img {width:100%;height:100%;object-fit:contain}
+.sticker-library small {color:#e55}
+.placed-stickers {position:absolute;inset:0;pointer-events:none;z-index:12;overflow:hidden}
+.placed-sticker {position:absolute;pointer-events:auto;cursor:grab;touch-action:none;user-select:none}
+.placed-sticker:active {cursor:grabbing}
+.placed-sticker img {display:block;width:100%;height:auto;pointer-events:none}
+.placed-sticker>button {position:absolute;top:-12px;right:-12px;border:0;border-radius:50%;width:24px;height:24px;background:#26262b;color:white;cursor:pointer;opacity:0}
+.placed-sticker:hover>button,.placed-sticker:focus-within>button {opacity:1}

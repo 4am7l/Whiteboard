@@ -349,3 +349,9 @@ html, body, #root { margin: 0; width: 100%; height: 100%; }
 .board :is(.music-overlay,.voice-overlay,.animated-stickers,.placed-stickers){
   clip-path:inset(0 var(--media-clip-right,0px) 0 var(--media-clip-left,0px));
 }
+
+/* Music/video/voice cards use their own controls. Hide Excalidraw's shape
+   properties panel when only these cards are selected; keep other menus. */
+.board.board-media-selected .excalidraw .App-menu_left .Island,
+.board.board-media-selected .excalidraw .App-menu_left .panelColumn,
+.board.board-media-selected .excalidraw .App-menu_left .properties-content{display:none!important}

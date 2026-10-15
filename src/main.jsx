@@ -721,7 +721,7 @@ function App() {
     if(Object.keys(selection).filter(id=>selection[id]).length!==1||!selection[selectedMusicId])return;
     const elements=editor.getSceneElementsIncludingDeleted();
     const current=elements.find(e=>e.id===selectedMusicId);
-    if(!current||current.isDeleted||current.locked||!current.customData?.music?.id)return;
+    if(!current||current.isDeleted||current.locked||!current.customData?.music)return;
     if((current.customData.musicColor||"default")===color)return;
     const changed={...current,customData:{...current.customData,musicColor:color},
       version:(current.version||0)+1,versionNonce:Math.floor(Math.random()*2147483647),updated:Date.now()};
@@ -908,7 +908,7 @@ function App() {
       document.querySelector(".board")?.classList.toggle("board-media-selected",Boolean(mediaOnly));
       const selected=elements.find(e=>e.customData?.voiceNoteId&&appState.selectedElementIds?.[e.id]);
       setSelectedVoiceId(old=>old===(selected?.id||null)?old:(selected?.id||null));
-      const selectedMusic=selectedIds.length===1?elements.find(e=>!e.isDeleted&&e.customData?.music?.id&&appState.selectedElementIds?.[e.id]):null;
+      const selectedMusic=selectedIds.length===1?elements.find(e=>!e.isDeleted&&e.customData?.music&&appState.selectedElementIds?.[e.id]):null;
       setSelectedMusicId(old=>old===(selectedMusic?.id||null)?old:(selectedMusic?.id||null));
       const next = { zoom: appState.zoom?.value || 1, x: appState.scrollX || 0, y: appState.scrollY || 0 };
       setViewport(old => old.zoom === next.zoom && old.x === next.x && old.y === next.y ? old : next);

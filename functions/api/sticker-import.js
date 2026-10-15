@@ -3,7 +3,7 @@ export async function onRequestPost({request,env}) {
  const body=await request.json().catch(()=>null);
  let url;
  try{url=new URL(body?.url)}catch{return Response.json({error:"Invalid URL"},{status:400})}
- if(url.protocol!=="https:"||!["media.giphy.com","i.giphy.com"].includes(url.hostname))return Response.json({error:"Only GIPHY images allowed"},{status:400});
+ if(url.protocol!=="https:"||!(/^(media\\d*|i)\\.giphy\\.com$/.test(url.hostname)))return Response.json({error:"Only GIPHY images allowed"},{status:400});
  const r=await fetch(url.toString(),{redirect:"error"});
  if(!r.ok)return Response.json({error:"Could not import image"},{status:502});
  const type=(r.headers.get("content-type")||"").split(";")[0].trim();

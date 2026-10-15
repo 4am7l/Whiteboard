@@ -29,6 +29,8 @@ function App() {
   const [placements,setPlacements]=useState([]);
   const [stickerError,setStickerError]=useState("");
   const draggingSticker=useRef(null);
+  const imageLoads=useRef(new Map());
+  const [sceneImages,setSceneImages]=useState([]);
   const [selectedSticker,setSelectedSticker]=useState(null);
   const [pin, setPin] = useState("");
   const [loginError, setLoginError] = useState("");
@@ -80,6 +82,7 @@ function App() {
           }
           known.current.set(element.id, Math.max(known.current.get(element.id) ?? -1, incomingVersion));
         }
+        await Promise.all(elements.filter(e=>e.type==="image"&&!e.isDeleted&&String(e.fileId||"").startsWith("sticker:")).map(e=>loadImageFile(e.fileId)));
         if (changed) {
           applying.current = true;
           apiRef.current.updateScene({ elements: [...merged.values()] });
@@ -215,16 +218,24 @@ function App() {
   }
   useEffect(()=>{if(!authorized)return;loadStickers();fetch("/api/sticker-favorites").then(r=>r.ok?r.json():null).then(d=>{if(d)setFavoriteIds(d.ids)}).catch(()=>{});},[authorized]);
   useEffect(()=>{
-    if(!authorized)return;
-    let active=true;
-    const poll=async()=>{
-      try {const r=await fetch("/api/sticker-placements",{cache:"no-store"});if(!r.ok)return;
-        const data=await r.json();if(active&&!draggingSticker.current)setPlacements(data.placements);
-      }catch{}
-    };
-    poll();const timer=setInterval(poll,2500);
-    return()=>{active=false;clearInterval(timer)};
-  },[authorized]);
+    if(!authorized||!api||!loaded.current||!stickers.length)return;
+    let cancelled=false;
+    async function migrate(){
+      try{
+        const r=await fetch("/api/sticker-placements",{cache:"no-store"});
+        if(!r.ok)return;
+        const {placements:old=[]}=await r.json();
+        for(const p of old){
+          if(cancelled)return;
+          const sticker=stickers.find(s=>s.id===p.sticker_id);
+          if(!sticker)continue;
+          await placeSticker(sticker,p);
+          await fetch("/api/sticker-placements?id="+encodeURIComponent(p.id),{method:"DELETE"});
+        }
+      }catch(e){setStickerError("Legacy sticker migration: "+e.message)}
+    }
+    migrate();return()=>{cancelled=true};
+  },[authorized,api,stickers,loaded.current]);
   async function uploadSticker(event) {
     const files=[...event.target.files];event.target.value="";
     for(const file of files){
@@ -235,58 +246,42 @@ function App() {
     }
     loadStickers();
   }
-  async function placeSticker(sticker) {
-    const state=api?.getAppState();
-    const p={id:crypto.randomUUID(),sticker_id:sticker.id,x:(window.innerWidth/2)/(state?.zoom?.value||1)-(state?.scrollX||0)-75,y:(window.innerHeight/2)/(state?.zoom?.value||1)-(state?.scrollY||0)-75,width:150};
-    setPlacements(old=>[...old,p]);
-    const r=await fetch("/api/sticker-placements",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});
-    if(!r.ok)setStickerError("Run sticker-schema.sql in D1 to enable placements");
+  async function loadImageFile(fileId) {
+    if(!apiRef.current||!fileId?.startsWith("sticker:"))return;
+    if(apiRef.current.getFiles()[fileId])return;
+    if(imageLoads.current.has(fileId))return imageLoads.current.get(fileId);
+    const task=(async()=>{
+      const id=fileId.slice(8);
+      const r=await fetch("/api/sticker-file?id="+encodeURIComponent(id));
+      if(!r.ok)throw Error("Image unavailable");
+      const blob=await r.blob();
+      const dataURL=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(blob)});
+      apiRef.current?.addFiles([{id:fileId,dataURL,mimeType:blob.type||"image/png",created:Date.now(),lastRetrieved:Date.now()}]);
+    })();
+    imageLoads.current.set(fileId,task);
+    try{await task}finally{imageLoads.current.delete(fileId)}
+  }
+  async function placeSticker(sticker,legacy=null) {
+    if(!api||!loaded.current){setStickerError("Wait for the board to connect");return}
+    const fileId="sticker:"+sticker.id;
+    try{await loadImageFile(fileId)}catch(e){setStickerError(e.message);return}
+    const state=api.getAppState(),zoom=state.zoom?.value||1;
+    const x=legacy?.x??(window.innerWidth/2)/zoom-(state.scrollX||0)-75;
+    const y=legacy?.y??(window.innerHeight/2)/zoom-(state.scrollY||0)-75;
+    const width=legacy?.width||150;
+    const files=api.getFiles(),data=files[fileId];
+    const dimensions=await new Promise(resolve=>{
+      const image=new Image();image.onload=()=>resolve({w:image.naturalWidth||150,h:image.naturalHeight||150});image.onerror=()=>resolve({w:150,h:150});image.src=data.dataURL;
+    });
+    const height=width*dimensions.h/dimensions.w;
+    const id=legacy?.id||crypto.randomUUID();
+    const element={id,type:"image",x,y,width,height,angle:0,strokeColor:"transparent",backgroundColor:"transparent",fillStyle:"solid",strokeWidth:1,strokeStyle:"solid",roughness:0,opacity:100,groupIds:[],frameId:null,roundness:null,seed:Math.floor(Math.random()*2147483647),version:1,versionNonce:Math.floor(Math.random()*2147483647),isDeleted:false,boundElements:null,updated:Date.now(),link:null,locked:false,fileId,status:"saved",scale:[1,1]};
+    const current=api.getSceneElementsIncludingDeleted();
+    if(current.some(e=>e.id===id))return;
+    api.updateScene({elements:[...current,element],appState:{selectedElementIds:{[id]:true}}});
+    pending.current.set(id,element);
+    known.current.set(id,1);
     setStickerMenu(false);
-  }
-  async function deletePlacement(id) {
-    setPlacements(old=>old.filter(p=>p.id!==id));
-    await fetch("/api/sticker-placements?id="+encodeURIComponent(id),{method:"DELETE"});
-  }
-  useEffect(()=>{
-    if(!authorized)return;
-    function key(event){
-      if(!selectedSticker||event.target.closest("input,textarea,[contenteditable=true]"))return;
-      if(event.key==="Delete"||event.key==="Backspace"){event.preventDefault();deletePlacement(selectedSticker);setSelectedSticker(null)}
-      if(event.key==="Escape")setSelectedSticker(null);
-    }
-    window.addEventListener("keydown",key);
-    return()=>window.removeEventListener("keydown",key);
-  },[authorized,selectedSticker]);
-  async function saveStickerPlacement(p){
-    try {const r=await fetch("/api/sticker-placements",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});
-      if(!r.ok)throw Error("Sticker save failed");
-    }catch(e){setStickerError(e.message)}
-  }
-  function startStickerResize(event,p){
-    if(event.button!==0)return;
-    event.preventDefault();event.stopPropagation();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    setSelectedSticker(p.id);
-    draggingSticker.current={id:p.id,mode:"resize",startX:event.clientX,startY:event.clientY,width:p.width};
-  }
-  function startStickerDrag(event,p) {
-    if(event.button!==0)return;
-    event.preventDefault();event.currentTarget.setPointerCapture(event.pointerId);
-    setSelectedSticker(p.id);
-    draggingSticker.current={id:p.id,mode:"move",startX:event.clientX,startY:event.clientY,x:p.x,y:p.y};
-  }
-  function moveSticker(event) {
-    const drag=draggingSticker.current;if(!drag)return;
-    const zoom=viewport.zoom||1;
-    setPlacements(old=>old.map(p=>p.id===drag.id?(drag.mode==="resize"?{...p,width:Math.max(30,Math.min(1000,drag.width+(event.clientX-drag.startX)/zoom))}:{...p,x:drag.x+(event.clientX-drag.startX)/zoom,y:drag.y+(event.clientY-drag.startY)/zoom}):p));
-  }
-  async function endStickerDrag(event) {
-    const drag=draggingSticker.current;if(!drag)return;
-    const zoom=viewport.zoom||1;
-    const p=placements.find(p=>p.id===drag.id);
-    const next=p?(drag.mode==="resize"?{...p,width:Math.max(30,Math.min(1000,drag.width+(event.clientX-drag.startX)/zoom))}:{...p,x:drag.x+(event.clientX-drag.startX)/zoom,y:drag.y+(event.clientY-drag.startY)/zoom}):null;
-    draggingSticker.current=null;
-    if(next){setPlacements(old=>old.map(x=>x.id===next.id?next:x));await saveStickerPlacement(next)}
   }
   function toggleTheme() {
     setTheme(previous => {
@@ -303,6 +298,7 @@ function App() {
   }
 
   function onChange(elements, appState) {
+    setSceneImages(elements.filter(e=>e.type==="image"&&!e.isDeleted&&String(e.fileId||"").startsWith("sticker:")));
     if (appState) {
       const next = { zoom: appState.zoom?.value || 1, x: appState.scrollX || 0, y: appState.scrollY || 0 };
       setViewport(old => old.zoom === next.zoom && old.x === next.x && old.y === next.y ? old : next);
@@ -347,11 +343,14 @@ function App() {
       </div>}
     </section>,libraryHost)}
     <Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} name="Our Whiteboard" />
-    <div className="placed-stickers">{placements.map(p=>{
-      const sticker=stickers.find(s=>s.id===p.sticker_id);if(!sticker)return null;
-      return <div key={p.id} className={`placed-sticker ${selectedSticker===p.id?"sticker-selected":""}`} style={{left:(p.x+viewport.x)*viewport.zoom,top:(p.y+viewport.y)*viewport.zoom,width:p.width*viewport.zoom}} onPointerDown={e=>startStickerDrag(e,p)} onPointerMove={moveSticker} onPointerUp={endStickerDrag} onPointerCancel={endStickerDrag}>
-        <img draggable="false" src={sticker.url} alt={sticker.name}/><button type="button" aria-label="Remove sticker from board" title="Remove sticker" onPointerDown={e=>e.stopPropagation()} onClick={()=>{deletePlacement(p.id);setSelectedSticker(null)}}>×</button><span className="sticker-resize-handle" role="button" aria-label="Resize sticker" title="Drag to resize" onPointerDown={e=>startStickerResize(e,p)} onPointerMove={moveSticker} onPointerUp={endStickerDrag} onPointerCancel={endStickerDrag}></span>
-      </div>;
+    <div className="animated-stickers" aria-hidden="true">{sceneImages.filter(e=>e.fileId.endsWith(".gif")).map(e=>{
+      const id=e.fileId.slice(8);
+      const scale=e.scale||[1,1];
+      return <img key={e.id} src={"/api/sticker-file?id="+encodeURIComponent(id)} alt="" draggable="false" style={{
+        position:"absolute",left:(e.x+viewport.x)*viewport.zoom,top:(e.y+viewport.y)*viewport.zoom,
+        width:e.width*viewport.zoom,height:e.height*viewport.zoom,
+        transform:`rotate(${e.angle||0}rad) scale(${scale[0]},${scale[1]})`,opacity:(e.opacity??100)/100
+      }}/>;
     })}</div>
     {pattern !== "none" && <div className={`board-pattern pattern-${pattern} pattern-${theme}`} aria-hidden="true" style={{
       "--pattern-size": `${(pattern === "graph" ? 10 : 20) * viewport.zoom}px`,

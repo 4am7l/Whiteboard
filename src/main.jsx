@@ -199,6 +199,7 @@ function App() {
   async function importSticker(item,asFavorite=false) {
     setStickerError("");
     try {
+      if(!apiRef.current)throw Error("Board is not ready yet");
       const r=await fetch("/api/sticker-import",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:item.url,name:item.title})});
       const data=await r.json();
       if(!r.ok)throw Error(data.error||"Import failed");
@@ -286,7 +287,7 @@ function App() {
     try{await task}finally{imageLoads.current.delete(fileId)}
   }
   async function placeSticker(sticker,legacy=null) {
-    if(!api||!loaded.current){setStickerError("Wait for the board to connect");return}
+    if(!api){setStickerError("Board editor is not ready");return}
     const fileId="sticker:"+sticker.id;
     try{await loadImageFile(fileId)}catch(e){setStickerError(e.message);return}
     const state=api.getAppState(),zoom=state.zoom?.value||1;
@@ -306,7 +307,7 @@ function App() {
     api.updateScene({elements:[...current,element],appState:{selectedElementIds:{[id]:true}}});
     pending.current.set(id,element);
     known.current.set(id,1);
-    setStickerMenu(false);
+    setStickerError("");
     return element;
   }
   function toggleTheme() {
@@ -369,6 +370,7 @@ function App() {
         {stickerError&&<small role="alert">{stickerError}</small>}
       </div>}
     </section>,libraryHost)}
+    {stickerError&&<div className="sticker-global-error" role="alert">{stickerError}<button type="button" onClick={()=>setStickerError("")}>×</button></div>}
     <Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} name="Our Whiteboard" />
     <div className="animated-stickers" aria-hidden="true">{sceneImages.filter(e=>e.fileId.endsWith(".gif")).map(e=>{
       const id=e.fileId.slice(8);

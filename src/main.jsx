@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { createPortal } from "react-dom";
 import { Excalidraw } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import "./style.css";
@@ -16,6 +17,11 @@ function App() {
   const [patternMenu, setPatternMenu] = useState(false);
   const [viewport, setViewport] = useState({ zoom: 1, x: 0, y: 0 });
   const [stickerMenu,setStickerMenu]=useState(false);
+  const [libraryHost,setLibraryHost]=useState(null);
+  const [searchQuery,setSearchQuery]=useState("");
+  const [searchKind,setSearchKind]=useState("stickers");
+  const [searchItems,setSearchItems]=useState([]);
+  const [searchBusy,setSearchBusy]=useState(false);
   const [stickers,setStickers]=useState([]);
   const [placements,setPlacements]=useState([]);
   const [stickerError,setStickerError]=useState("");
@@ -152,6 +158,39 @@ function App() {
     };
   }, [api, authorized]);
 
+  useEffect(()=>{
+    if(!authorized)return;
+    const locate=()=>{
+      const host=document.querySelector('.library-menu, .layer-ui__library, [data-testid="library-menu"], .sidebar[data-name="library"]');
+      setLibraryHost(old=>old===host?old:host);
+    };
+    const observer=new MutationObserver(locate);
+    observer.observe(document.body,{childList:true,subtree:true});
+    locate();
+    return()=>observer.disconnect();
+  },[authorized]);
+  async function searchGiphy(event) {
+    event.preventDefault();
+    if(!searchQuery.trim())return;
+    setSearchBusy(true);setStickerError("");
+    try {
+      const r=await fetch("/api/sticker-search?q="+encodeURIComponent(searchQuery)+"&kind="+searchKind);
+      const data=await r.json();
+      if(!r.ok)throw Error(data.error||"Search failed");
+      setSearchItems(data.items);
+    }catch(e){setStickerError(e.message)}
+    finally{setSearchBusy(false)}
+  }
+  async function importSticker(item) {
+    setStickerError("");
+    try {
+      const r=await fetch("/api/sticker-import",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:item.url,name:item.title})});
+      const data=await r.json();
+      if(!r.ok)throw Error(data.error||"Import failed");
+      await loadStickers();
+      await placeSticker({id:data.id});
+    }catch(e){setStickerError(e.message)}
+  }
   async function loadStickers() {
     try {
       const r=await fetch("/api/stickers",{cache:"no-store"});
@@ -247,15 +286,21 @@ function App() {
           <button type="button" key={id} className={pattern === id ? "selected" : ""} onClick={() => choosePattern(id)}>{pattern === id ? "✓ " : ""}{label}</button>)}
       </div>}
     </div>
-    <div className="sticker-controls">
-      <button type="button" className={`sticker-trigger ${theme==="dark"?"pattern-dark":"pattern-light"}`} onClick={()=>setStickerMenu(v=>!v)}>♡ Stickers</button>
-      {stickerMenu&&<div className={`sticker-library ${theme==="dark"?"pattern-dark":"pattern-light"}`}>
-        <strong>Our Stickers</strong>
+    {libraryHost&&createPortal(<section className={`sticker-library-inline ${theme==="dark"?"pattern-dark":"pattern-light"}`}>
+      <button type="button" className="sticker-section-toggle" onClick={()=>setStickerMenu(v=>!v)}>♡ Stickers {stickerMenu?"▴":"▾"}</button>
+      {stickerMenu&&<div className="sticker-library-content">
         <label className="sticker-upload">＋ Upload PNG / JPG / WebP / GIF<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple onChange={uploadSticker} hidden/></label>
+        <form className="sticker-search" onSubmit={searchGiphy}>
+          <input aria-label="Search GIFs and stickers" placeholder="Search stickers or GIFs…" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}/>
+          <select aria-label="Search type" value={searchKind} onChange={e=>setSearchKind(e.target.value)}><option value="stickers">Stickers</option><option value="gif">GIFs</option></select>
+          <button type="submit" disabled={searchBusy}>{searchBusy?"…":"Search"}</button>
+        </form>
+        <div className="sticker-grid">{searchItems.map(item=><button type="button" key={item.id} title={"Save and add "+item.title} onClick={()=>importSticker(item)}><img src={item.preview} alt={item.title}/></button>)}</div>
+        <strong>Our saved stickers</strong>
         <div className="sticker-grid">{stickers.map(sticker=><button type="button" key={sticker.id} title={sticker.name} onClick={()=>placeSticker(sticker)}><img src={sticker.url} alt={sticker.name}/></button>)}</div>
         {stickerError&&<small role="alert">{stickerError}</small>}
       </div>}
-    </div>
+    </section>,libraryHost)}
     <Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} name="Our Whiteboard" />
     <div className="placed-stickers">{placements.map(p=>{
       const sticker=stickers.find(s=>s.id===p.sticker_id);if(!sticker)return null;

@@ -452,7 +452,7 @@ function App() {
     </section>,libraryHost)}
     {stickerError&&<div className="sticker-global-error" role="alert">{stickerError}<button type="button" onClick={()=>setStickerError("")}>×</button></div>}
     <Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} name="Our Whiteboard" />
-    <div className="voice-overlay">{voiceCards.map(e=><div className="voice-card" key={e.id} data-voice-element={e.id} style={{left:(e.x+viewport.x)*viewport.zoom,top:(e.y+viewport.y)*viewport.zoom,width:e.width*viewport.zoom,height:e.height*viewport.zoom,transform:`rotate(${e.angle||0}rad)`,opacity:(e.opacity??100)/100}}><span>🎙 Voice note</span><audio controls preload="none" src={"/api/voice-notes?id="+encodeURIComponent(e.customData.voiceNoteId)}/></div>)}</div>
+    <div className="voice-overlay">{voiceCards.map(e=><div className="voice-card" key={e.id} data-voice-element={e.id} style={{left:(e.x+viewport.x)*viewport.zoom,top:(e.y+viewport.y)*viewport.zoom,width:e.width*viewport.zoom,height:e.height*viewport.zoom,transform:`rotate(${e.angle||0}rad)`,opacity:(e.opacity??100)/100}}><div className="voice-card-shine"/><div className="voice-card-header"><span className="voice-card-icon">♫</span><span className="voice-card-title">Voice message<small>Tap play to listen</small></span><span className="voice-card-sparkle">✦</span></div><audio controls preload="none" src={"/api/voice-notes?id="+encodeURIComponent(e.customData.voiceNoteId)}/></div>)}</div>
     <div className="animated-stickers" aria-hidden="true">{sceneImages.filter(e=>e.fileId.endsWith(".gif")).map(e=>{
       const id=e.fileId.slice(8);
       const scale=e.scale||[1,1];

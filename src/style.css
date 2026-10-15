@@ -415,3 +415,56 @@ html, body, #root { margin: 0; width: 100%; height: 100%; }
 body > .doodle-panel-trigger{position:fixed!important;z-index:2147483600!important;pointer-events:auto!important;touch-action:manipulation!important;cursor:pointer!important}
 body > .doodle-panel{position:fixed!important;z-index:2147483601!important;pointer-events:auto!important}
 body > .doodle-panel *{pointer-events:auto}
+
+/* Doodle browser: fixed-size, non-overlapping sticker tiles. */
+body > .doodle-panel .doodle-grid{
+  display:grid!important;
+  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  grid-auto-rows:98px!important;
+  grid-auto-flow:row!important;
+  align-items:stretch!important;
+  align-content:start!important;
+  gap:9px!important;
+  height:auto!important;
+  max-height:min(52vh,440px)!important;
+  overflow-y:auto!important;
+  overflow-x:hidden!important;
+  padding:5px 5px 12px!important;
+  box-sizing:border-box!important;
+  scrollbar-gutter:stable;
+}
+body > .doodle-panel .doodle-grid > button{
+  position:relative!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  width:100%!important;
+  height:98px!important;
+  min-width:0!important;
+  min-height:0!important;
+  max-height:98px!important;
+  aspect-ratio:auto!important;
+  margin:0!important;
+  padding:12px!important;
+  overflow:hidden!important;
+  box-sizing:border-box!important;
+  border:1px solid #8885!important;
+  border-radius:11px!important;
+  background:color-mix(in srgb,currentColor 4%,transparent)!important;
+  cursor:pointer!important;
+}
+body > .doodle-panel .doodle-grid > button:hover{border-color:#a99bff!important;background:color-mix(in srgb,#a99bff 13%,transparent)!important}
+body > .doodle-panel .doodle-grid > button > img{
+  display:block!important;
+  width:100%!important;
+  height:100%!important;
+  max-width:100%!important;
+  max-height:100%!important;
+  min-width:0!important;
+  min-height:0!important;
+  object-fit:contain!important;
+  object-position:center!important;
+  flex:0 1 auto!important;
+  margin:auto!important;
+}
+@media(max-width:420px){body > .doodle-panel .doodle-grid{grid-auto-rows:88px!important;gap:7px!important}body > .doodle-panel .doodle-grid > button{height:88px!important;max-height:88px!important;padding:10px!important}}

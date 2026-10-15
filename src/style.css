@@ -315,3 +315,14 @@ html, body, #root { margin: 0; width: 100%; height: 100%; }
 .music-overlay .music-glass-cover-play{inset:auto!important;left:50%!important;top:50%!important;transform:translate(-50%,-50%)!important;width:36px!important;height:36px!important;border-radius:50%!important;background:#10101bbd!important;opacity:1!important}
 .music-overlay .music-glass-cover-play:hover{background:#10101be8!important}
 .music-overlay .music-glass-cover img{pointer-events:none}
+
+/* Keep the Excalidraw tool selector above music, voice, stickers and other board overlays. */
+.board > .excalidraw{isolation:auto!important;z-index:auto!important}
+.board .excalidraw .App-menu_top,
+.board .excalidraw .App-toolbar,
+.board .excalidraw .App-toolbar-container,
+.board .excalidraw .default-sidebar-trigger{
+  position:relative;
+  z-index:1000!important;
+}
+.board .excalidraw .App-menu_top{pointer-events:auto}

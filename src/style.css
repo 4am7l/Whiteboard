@@ -343,3 +343,9 @@ html, body, #root { margin: 0; width: 100%; height: 100%; }
 .board .excalidraw .layer-ui__wrapper .App-menu_top,
 .board .excalidraw .layer-ui__wrapper .App-toolbar,
 .board .excalidraw .layer-ui__wrapper .App-toolbar-container{pointer-events:auto!important}
+
+/* Mask canvas media only where an Excalidraw sidebar is open.
+   Never elevate the entire Excalidraw canvas: that hides drawings. */
+.board :is(.music-overlay,.voice-overlay,.animated-stickers,.placed-stickers){
+  clip-path:inset(0 var(--media-clip-right,0px) 0 var(--media-clip-left,0px));
+}

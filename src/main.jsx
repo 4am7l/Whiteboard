@@ -5,6 +5,9 @@ import "@excalidraw/excalidraw/index.css";
 import "./style.css";
 
 function App() {
+  const [authorized, setAuthorized] = useState(false);
+  const [pin, setPin] = useState("");
+  const [loginError, setLoginError] = useState("");
   const [api, setApi] = useState(null);
   const [status, setStatus] = useState("Connecting...");
   const loaded = useRef(false);
@@ -15,9 +18,26 @@ function App() {
   apiRef.current = api;
 
   useEffect(() => {
-    if (!api) return;
+    fetch("/api/board", { cache: "no-store" }).then(r => { if (r.ok) setAuthorized(true); }).catch(() => {});
+  }, []);
+
+  async function login(event) {
+    event.preventDefault();
+    setLoginError("");
+    try {
+      const response = await fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin }) });
+      if (!response.ok) throw new Error(response.status === 503 ? "Configure Cloudflare secrets first" : "Incorrect code");
+      setAuthorized(true);
+    } catch (error) { setLoginError(error.message); }
+  }
+
+  useEffect(() => {
+    if (!api || !authorized) return;
     let active = true;
+    let busy = false;
     async function sync() {
+      if (busy || pending.current.size) return;
+      busy = true;
       try {
         const response = await fetch("/api/board", { cache: "no-store" });
         if (!response.ok) throw new Error("Database unavailable");
@@ -43,27 +63,24 @@ function App() {
         }
         loaded.current = true;
         setStatus("Connected");
-      } catch (error) {
-        setStatus("Offline — changes may not be saved");
-      }
+      } catch { setStatus("Offline — changes may not be saved"); }
+      finally { busy = false; }
     }
     sync();
     const timer = setInterval(sync, 1800);
     return () => { active = false; clearInterval(timer); };
-  }, [api]);
+  }, [api, authorized]);
 
   useEffect(() => {
-    if (!api) return;
+    if (!api || !authorized) return;
     let active = true;
+    let busy = false;
     async function flush() {
-      if (!loaded.current || !pending.current.size) return;
+      if (busy || !loaded.current || !pending.current.size) return;
+      busy = true;
       const batch = [...pending.current.values()];
       try {
-        const response = await fetch("/api/board", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ elements: batch })
-        });
+        const response = await fetch("/api/board", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ elements: batch }) });
         if (!response.ok) throw new Error("Save failed");
         if (!active) return;
         for (const element of batch) {
@@ -71,10 +88,11 @@ function App() {
         }
         setStatus("Saved");
       } catch { setStatus("Save failed — retrying"); }
+      finally { busy = false; }
     }
     const timer = setInterval(flush, 900);
     return () => { active = false; clearInterval(timer); };
-  }, [api]);
+  }, [api, authorized]);
 
   function onChange(elements) {
     if (!loaded.current || applying.current) return;
@@ -86,9 +104,7 @@ function App() {
     }
   }
 
-  return <main className="board">
-    <div className="connection-status" role="status">{status}</div>
-    <Excalidraw excalidrawAPI={setApi} onChange={onChange} name="Our Whiteboard" />
-  </main>;
+  if (!authorized) return <form className="login" onSubmit={login}><h1>Our Whiteboard ♡</h1><p>Enter our 6-digit code</p><input aria-label="6-digit code" type="password" inputMode="numeric" autoComplete="off" maxLength={6} pattern="[0-9]{6}" required value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ""))}/><button type="submit">Open board</button><p role="alert">{loginError}</p></form>;
+  return <main className="board"><div className="connection-status" role="status">{status}</div><Excalidraw excalidrawAPI={setApi} onChange={onChange} name="Our Whiteboard" /></main>;
 }
 createRoot(document.getElementById("root")).render(<App />);

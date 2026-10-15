@@ -135,8 +135,27 @@
 /* Prevent Excalidraw's second properties strip from appearing on unlock.
    The native canvas toolbar and custom Lock/Unlock remain intact. */
 .workspace:has(.selection-toolbar) .board .excalidraw .App-menu_left{display:none!important}
-.board.board-locked-selected .context-menu li:not([data-testid="toggleElementLock"]),
-.board.board-locked-selected .context-menu hr{display:none}
+/* Use the dedicated Lock / Unlock control in the selection toolbar only.
+   Excalidraw's duplicated context-menu lock option is hidden. */
+.context-menu li[data-testid="toggleElementLock"],
+.context-menu [data-testid="toggleElementLock"]{display:none!important}
+/* The native menu offers editing actions that are not applicable to a locked selection. */
+body:has(.board.board-locked-selected) .context-menu{display:none!important}
+
+/* Visible selection rectangle for dragging from locked elements. */
+.board-selection-marquee{
+  position:absolute;
+  box-sizing:border-box;
+  border:1.5px dashed #8b71e3;
+  border-radius:3px;
+  background:rgba(139,113,227,.13);
+  pointer-events:none;
+  z-index:18;
+}
+.workspace-dark .board-selection-marquee{
+  border-color:#c0b1ff;
+  background:rgba(165,142,255,.17);
+}
 
 /* Small frosted, translucent white logout at the very bottom center. */
 .workspace .board-logout-bottom{

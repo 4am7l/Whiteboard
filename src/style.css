@@ -249,3 +249,18 @@ html, body, #root { margin: 0; width: 100%; height: 100%; }
 .board-voice-selected .App-menu__left__content,
 .board-voice-selected .App-menu__left .Island,
 .board-voice-selected .App-menu__left .properties-panel{display:none!important}
+
+/* Chat-style voice message: simple bubble, waveform and themed accent. */
+.voice-card.voice-card-chat{display:flex!important;flex-direction:column!important;justify-content:center!important;padding:9px 12px!important;gap:0!important;border-radius:17px!important;box-shadow:0 2px 7px #00000013!important}
+.voice-card-chat.voice-card-light{background:color-mix(in srgb,#fff 91%,var(--voice-accent))!important;border:1px solid color-mix(in srgb,#dedee6 85%,var(--voice-accent))!important;color:#30313a!important}
+.voice-card-chat.voice-card-dark{background:color-mix(in srgb,#292930 89%,var(--voice-accent))!important;border:1px solid #44444c!important;color:#f4f4f7!important}
+.voice-chat-player{display:flex;align-items:center;gap:11px;width:100%;min-width:0}
+.voice-chat-play{display:grid;place-items:center;flex:0 0 37px;width:37px;height:37px;padding:0;border:0;border-radius:50%;background:var(--voice-accent);color:#fff;font:700 15px system-ui;cursor:pointer;pointer-events:auto}
+.voice-chat-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
+.voice-waveform{height:28px;display:flex;align-items:center;justify-content:space-between;gap:2px;cursor:pointer;touch-action:manipulation;pointer-events:auto}
+.voice-waveform span{display:block;flex:1;min-width:2px;max-width:4px;border-radius:5px;background:color-mix(in srgb,var(--voice-accent) 34%,transparent);pointer-events:none}
+.voice-waveform span.played{background:var(--voice-accent)}
+.voice-waveform:focus-visible{outline:2px solid var(--voice-accent);outline-offset:3px;border-radius:3px}
+.voice-chat-meta{display:flex;justify-content:space-between;align-items:center;gap:4px;font:500 10px system-ui;opacity:.7}
+.voice-chat-mic{font-size:11px}
+.voice-card-chat audio{display:none}

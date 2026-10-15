@@ -521,6 +521,22 @@ function App() {
     setStickerError("");
     return element;
   }
+  function toggleSelectedBoardLock(){
+    const editor=apiRef.current;
+    if(!editor)return;
+    const ids=Object.keys(editor.getAppState()?.selectedElementIds||{}).filter(id=>editor.getAppState().selectedElementIds[id]);
+    if(!ids.length)return;
+    const selected=editor.getSceneElementsIncludingDeleted().filter(e=>ids.includes(e.id)&&!e.isDeleted);
+    if(!selected.length)return;
+    const lock=selected.some(e=>!e.locked);
+    const now=Date.now();
+    const changed=new Map(selected.map(e=>[e.id,{...e,locked:lock,version:(e.version||0)+1,versionNonce:Math.floor(Math.random()*2147483647),updated:now}]));
+    editor.updateScene({elements:editor.getSceneElementsIncludingDeleted().map(e=>changed.get(e.id)||e),appState:{selectedElementIds:Object.fromEntries(ids.map(id=>[id,true]))}});
+    for(const element of changed.values()){
+      pending.current.set(element.id,element);
+      known.current.set(element.id,element.version);
+    }
+  }
   function deleteSelectedBoardItems(){
     const editor=apiRef.current;
     if(!editor)return;
@@ -735,7 +751,7 @@ function App() {
     </>, document.body)}
     {stickerError&&<div className="sticker-global-error" role="alert">{stickerError}<button type="button" onClick={()=>setStickerError("")}>×</button></div>}
     {selectedVoiceId&&<div className={`voice-palette voice-palette-${theme}`} aria-label="Voice note appearance"><span>Voice color</span><div className="voice-palette-swatches">{[["default","Auto"],["violet","Purple"],["blue","Blue"],["rose","Pink"],["mint","Mint"]].map(([value,label])=><button key={value} type="button" className={"voice-swatch voice-swatch-"+value} title={label} aria-label={label} onClick={()=>{setVoiceHex("");setVoiceColor(value)}}>{value==="default"?"◐":""}</button>)}</div><label className="voice-custom-picker" title="Pick a custom color">✎ <input aria-label="Pick any color" type="color" value={/^#[0-9a-fA-F]{6}$/.test(voiceHex)?voiceHex:"#9274db"} onChange={e=>{setVoiceHex(e.target.value);setVoiceColor(e.target.value)}}/></label><form className="voice-hex-form" onSubmit={e=>{e.preventDefault();if(/^#[0-9a-fA-F]{6}$/.test(voiceHex))setVoiceColor(voiceHex)}}><input aria-label="Hex color" placeholder="#9274DB" maxLength={7} value={voiceHex} onChange={e=>setVoiceHex(e.target.value)} /><button type="submit" disabled={!/^#[0-9a-fA-F]{6}$/.test(voiceHex)}>Apply</button></form></div>}
-    <Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} name="Our Whiteboard" />{selectedBoardIds.length>0&&<button type="button" className="board-delete-selected" onClick={deleteSelectedBoardItems} aria-label="Delete selected items" title="Delete selected items">🗑 Delete{selectedBoardIds.length>1?" ("+selectedBoardIds.length+")":""}</button>}
+    <Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} name="Our Whiteboard" />{selectedBoardIds.length>0&&<button type="button" className="board-lock-selected" onClick={toggleSelectedBoardLock} aria-label="Lock or unlock selected items" title="Lock or unlock selected items">{selectedBoardIds.some(id=>api?.getSceneElementsIncludingDeleted()?.find(e=>e.id===id&&!e.isDeleted&&!e.locked))?"🔒 Lock":"🔓 Unlock"}</button>}{selectedBoardIds.length>0&&<button type="button" className="board-delete-selected" onClick={deleteSelectedBoardItems} aria-label="Delete selected items" title="Delete selected items">🗑 Delete{selectedBoardIds.length>1?" ("+selectedBoardIds.length+")":""}</button>}
     <div className="voice-overlay">{voiceCards.map(e=><VoiceNoteCard key={e.id} element={e} theme={theme} viewport={viewport}/>)}</div><div className="music-overlay">{musicCards.map(e=><MusicCard key={e.id} element={e} theme={theme} viewport={viewport}/>)}</div>
     <div className="animated-stickers" aria-hidden="true">{sceneImages.filter(e=>String(e.fileId).endsWith(".gif")||(theme==="dark"&&imageSources[e.fileId])).map(e=>{
       const isGif=String(e.fileId).endsWith(".gif");

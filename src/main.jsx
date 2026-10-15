@@ -174,6 +174,8 @@ function App() {
       const response = await fetch("/api/logout", { method: "POST" });
       if (!response.ok) throw new Error("Logout failed");
       setAuthorized(false);
+      setToolsOpen(false);
+      closePanels();
       setPin("");
       setApi(null);
       loaded.current = false;
@@ -304,15 +306,6 @@ function App() {
       root.removeEventListener("contextmenu", context, true);
     };
   }, [api, authorized]);
-
-  useEffect(()=>{
-    if(!authorized)return;
-    const toolbar=document.querySelector(".workspace-toolbar");
-    if(!toolbar)return;
-    const measure=()=>toolbar.parentElement.style.setProperty("--toolbar-bottom",`${toolbar.getBoundingClientRect().bottom+8}px`);
-    const observer=new ResizeObserver(measure);observer.observe(toolbar);measure();
-    return()=>observer.disconnect();
-  },[authorized]);
 
   useEffect(()=>{
     if(!api||!authorized)return;

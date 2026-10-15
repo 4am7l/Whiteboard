@@ -711,11 +711,12 @@ function App() {
       }
     }
     const ws=liveSocket.current, now=Date.now();
-    if (ws?.readyState===WebSocket.OPEN && now-liveLast.current>=75) {
-      const changes=elements.filter(e=>liveSent.current.get(e.id)!==e.version+":"+e.versionNonce).slice(0,40);
+    // Only transmit changed elements while actively editing; cap bandwidth and messages.
+    if (ws?.readyState===WebSocket.OPEN && ws.bufferedAmount<65536 && now-liveLast.current>=150) {
+      const changes=elements.filter(e=>liveSent.current.get(e.id)!==e.version+":"+e.versionNonce).slice(0,20);
       if(changes.length) {
         const payload=JSON.stringify({type:"elements",elements:changes});
-        if(payload.length<140000) {
+        if(payload.length<64000) {
           ws.send(payload);
           changes.forEach(e=>liveSent.current.set(e.id,e.version+":"+e.versionNonce));
           liveLast.current=now;

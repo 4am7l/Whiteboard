@@ -1,0 +1,8 @@
+export async function onRequestGet({request,env}) {
+ if(!env.STICKERS)return new Response("R2 unavailable",{status:503});
+ const id=new URL(request.url).searchParams.get("id");
+ if(!id||!/^[a-f0-9-]{36}\.(png|jpg|webp|gif)$/.test(id))return new Response("Invalid id",{status:400});
+ const item=await env.STICKERS.get("library/"+id);
+ if(!item)return new Response("Not found",{status:404});
+ return new Response(item.body,{headers:{"Content-Type":item.httpMetadata?.contentType||"application/octet-stream","Cache-Control":"private, max-age=300","X-Content-Type-Options":"nosniff"}});
+}

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Excalidraw } from "@excalidraw/excalidraw";
+import { Excalidraw, getCommonBounds, CaptureUpdateAction } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import "./style.css";
 import "./layout.css";
@@ -73,6 +73,22 @@ function MusicCard({element,theme,viewport}){
   </div>;
 }
 
+// Include complete groups, frame contents and attached text when selecting a lock.
+function expandLockSelection(elements,initial){
+  const ids=new Set(initial);let changed=true;
+  while(changed){
+    changed=false;
+    const groups=new Set(elements.filter(e=>ids.has(e.id)).flatMap(e=>e.groupIds||[]));
+    for(const e of elements){
+      if(e.isDeleted||ids.has(e.id))continue;
+      if((e.groupIds||[]).some(id=>groups.has(id))||ids.has(e.frameId)||ids.has(e.containerId)){
+        ids.add(e.id);changed=true;
+      }
+    }
+  }
+  return ids;
+}
+
 function App() {
   const [authorized, setAuthorized] = useState(false);
   const [theme, setTheme] = useState(() => {
@@ -114,6 +130,9 @@ function App() {
   const [musicError,setMusicError]=useState("");
   const [selectedVoiceId,setSelectedVoiceId]=useState(null);
   const [selectedBoardIds,setSelectedBoardIds]=useState([]);
+  const [selectionLocked,setSelectionLocked]=useState(false);
+  const lockedSnapshot=useRef(new Map());
+  const lastSelection=useRef({});
   const [voiceHex,setVoiceHex]=useState("");
   const [recording,setRecording]=useState(false);
   const [voiceBusy,setVoiceBusy]=useState(false);
@@ -193,6 +212,7 @@ function App() {
         await Promise.all(elements.filter(e=>e.type==="image"&&!e.isDeleted).map(e=>String(e.fileId||"").startsWith("sticker:")?loadImageFile(e.fileId).catch(()=>{}):restoreBoardImage(e.fileId).catch(()=>{})));
         if (changed) {
           applying.current = true;
+          lockedSnapshot.current=new Map(); // Accept normalized remote elements on the next onChange.
           apiRef.current.updateScene({ elements: [...merged.values()] });
           queueMicrotask(() => { applying.current = false; });
         }
@@ -292,6 +312,65 @@ function App() {
     const observer=new ResizeObserver(measure);observer.observe(toolbar);measure();
     return()=>observer.disconnect();
   },[authorized]);
+
+  useEffect(()=>{
+    if(!api||!authorized)return;
+    const board=document.querySelector(".board");if(!board)return;
+    let gesture=null;
+    const point=e=>{
+      const state=api.getAppState(),rect=board.getBoundingClientRect(),zoom=state.zoom.value;
+      return {x:(e.clientX-rect.left)/zoom-state.scrollX,y:(e.clientY-rect.top)/zoom-state.scrollY};
+    };
+    const inBounds=(e,p)=>{const [x1,y1,x2,y2]=getCommonBounds([e]);return p.x>=x1&&p.x<=x2&&p.y>=y1&&p.y<=y2};
+    const down=e=>{
+      if(e.button!==0||e.isPrimary===false||api.getAppState().activeTool.type!=="selection"||e.target.closest('.layer-ui__wrapper,.popover,.Modal'))return;
+      const p=point(e),elements=api.getSceneElements();
+      const hit=[...elements].reverse().find(el=>inBounds(el,p));
+      if(hit?.locked){
+        e.preventDefault();e.stopPropagation();
+        const state=api.getAppState();
+        const ids=expandLockSelection(elements,[hit.id]);
+        const selected=e.shiftKey?{...state.selectedElementIds}:{};
+        for(const id of ids)selected[id]=true;
+        api.updateScene({appState:{selectedElementIds:selected,selectedLinearElement:null,editingTextElement:null}});
+        gesture={blocked:true,id:e.pointerId};
+      }else if(!hit){gesture={start:p,id:e.pointerId,base:e.shiftKey?{...api.getAppState().selectedElementIds}:{}};}
+    };
+    const move=e=>{if(gesture?.blocked&&gesture.id===e.pointerId){e.preventDefault();e.stopPropagation()}};
+    const up=e=>{
+      const current=gesture;gesture=null;
+      if(!current||current.id!==e.pointerId)return;
+      if(current.blocked){e.preventDefault();e.stopPropagation();return}
+      const end=point(e),start=current.start;
+      if(Math.hypot(end.x-start.x,end.y-start.y)*api.getAppState().zoom.value<5)return;
+      const ids=api.getSceneElements().filter(el=>{
+        if(!el.locked)return false;
+        const [x1,y1,x2,y2]=getCommonBounds([el]);
+        return x1>=Math.min(start.x,end.x)&&x2<=Math.max(start.x,end.x)&&y1>=Math.min(start.y,end.y)&&y2<=Math.max(start.y,end.y);
+      }).map(el=>el.id);
+      if(ids.length)queueMicrotask(()=>{
+        const all=expandLockSelection(api.getSceneElements(),ids);
+        api.updateScene({appState:{selectedElementIds:{...current.base,...api.getAppState().selectedElementIds,...Object.fromEntries([...all].map(id=>[id,true]))},selectedLinearElement:null}});
+      });
+    };
+    const cancel=()=>{gesture=null};
+    board.addEventListener("pointerdown",down,true);
+    window.addEventListener("pointermove",move,true);
+    window.addEventListener("pointerup",up,true);
+    window.addEventListener("pointercancel",cancel,true);
+    return()=>{board.removeEventListener("pointerdown",down,true);window.removeEventListener("pointermove",move,true);window.removeEventListener("pointerup",up,true);window.removeEventListener("pointercancel",cancel,true)};
+  },[api,authorized]);
+
+  useEffect(()=>{
+    if(!selectionLocked)return;
+    const preventEdit=e=>{
+      if(e.target.closest('input,textarea,[contenteditable="true"]'))return;
+      const command=e.ctrlKey||e.metaKey;
+      if(["Delete","Backspace","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Enter"].includes(e.key)||(command&&["d","x","v"].includes(e.key.toLowerCase()))){e.preventDefault();e.stopImmediatePropagation()}
+    };
+    window.addEventListener("keydown",preventEdit,true);
+    return()=>window.removeEventListener("keydown",preventEdit,true);
+  },[selectionLocked]);
 
   // Only one auxiliary panel is open; Escape and outside taps dismiss it.
   function closePanels(){setStickerMenu(false);setMusicOpen(false);setPatternMenu(false)}
@@ -519,29 +598,18 @@ function App() {
     setStickerError("");
     return element;
   }
-  function deleteSelectedBoardItems(){
-    const editor=apiRef.current;
-    if(!editor)return;
-    const selected=editor.getAppState()?.selectedElementIds||{};
-    const ids=Object.keys(selected).filter(id=>selected[id]);
-    if(!ids.length)return;
-    const idSet=new Set(ids);
-    const now=Date.now();
-    const next=editor.getSceneElementsIncludingDeleted().map(element=>{
-      if(!idSet.has(element.id)||element.isDeleted)return element;
-      return {...element,isDeleted:true,version:(element.version||0)+1,versionNonce:Math.floor(Math.random()*2147483647),updated:now};
-    });
-    editor.updateScene({elements:next,appState:{selectedElementIds:{}}});
-    for(const element of next){
-      if(!idSet.has(element.id)||!element.isDeleted)continue;
-      pending.current.set(element.id,element);
-      known.current.set(element.id,element.version||1);
-    }
-    setSelectedBoardIds([]);
-    setSelectedVoiceId(null);
+  function toggleSelectedLock(){
+    const editor=apiRef.current;if(!editor)return;
+    const selected=editor.getAppState().selectedElementIds||{};
+    const elements=editor.getSceneElementsIncludingDeleted();
+    const ids=expandLockSelection(elements,Object.keys(selected).filter(id=>selected[id]));
+    const lock=!elements.some(e=>ids.has(e.id)&&e.locked&&!e.isDeleted);
+    const next=elements.map(e=>!ids.has(e.id)||e.isDeleted?e:{...e,locked:lock,version:e.version+1,versionNonce:Math.floor(Math.random()*2147483647),updated:Date.now()});
+    editor.updateScene({elements:next,appState:{selectedElementIds:Object.fromEntries([...ids].map(id=>[id,true])),selectedLinearElement:null},captureUpdate:CaptureUpdateAction.IMMEDIATELY});
   }
+
   function setVoiceColor(color){
-    const editor=apiRef.current;if(!editor||!selectedVoiceId)return;
+    const editor=apiRef.current;if(!editor||!selectedVoiceId||selectionLocked)return;
     const elements=editor.getSceneElementsIncludingDeleted();
     const next=elements.map(e=>e.id!==selectedVoiceId?e:{...e,customData:{...e.customData,voiceColor:color},backgroundColor:"transparent",strokeColor:"transparent",version:(e.version||0)+1,versionNonce:Math.floor(Math.random()*2147483647),updated:Date.now()});
     editor.updateScene({elements:next});
@@ -631,6 +699,26 @@ function App() {
   }
 
   function onChange(elements, appState, files) {
+    if(!applying.current){
+      let repaired=false;
+      const comparable=e=>JSON.stringify(Object.fromEntries(Object.entries(e).filter(([key])=>!["version","versionNonce","updated","locked"].includes(key))));
+      const safe=elements.map(e=>{
+        const previous=lockedSnapshot.current.get(e.id);
+        if(!previous?.locked||comparable(previous)===comparable(e))return e;
+        repaired=true;
+        return {...previous,locked:e.locked,version:Math.max(previous.version,e.version)+1,versionNonce:Math.floor(Math.random()*2147483647),updated:Date.now()};
+      });
+      const present=new Set(safe.map(e=>e.id));
+      for(const [id,previous] of lockedSnapshot.current){if(!present.has(id)){safe.push(previous);repaired=true}}
+      if(repaired){
+        lockedSnapshot.current=new Map(safe.filter(e=>e.locked&&!e.isDeleted).map(e=>[e.id,structuredClone(e)]));
+        const selection={...lastSelection.current};
+        queueMicrotask(()=>apiRef.current?.updateScene({elements:safe,appState:{selectedElementIds:selection,selectedLinearElement:null}}));
+        return;
+      }
+    }
+    lockedSnapshot.current=new Map(elements.filter(e=>e.locked&&!e.isDeleted).map(e=>[e.id,structuredClone(e)]));
+    lastSelection.current={...appState?.selectedElementIds};
     persistBoardImages(elements,files);
     const images=elements.filter(e=>e.type==="image"&&!e.isDeleted&&e.fileId);
     const voices=elements.filter(e=>!e.isDeleted&&e.customData?.voiceNoteId);
@@ -674,6 +762,7 @@ function App() {
     setMusicCards(old=>old.length===musics.length&&old.every((e,i)=>e===musics[i])?old:musics);
     if (appState) {
       const selectedIds=Object.keys(appState.selectedElementIds||{}).filter(id=>appState.selectedElementIds[id]);
+      setSelectionLocked(elements.some(e=>!e.isDeleted&&e.locked&&selectedIds.includes(e.id)));
       setSelectedBoardIds(old=>old.length===selectedIds.length&&old.every(id=>selectedIds.includes(id))?old:selectedIds);
       const mediaOnly=selectedIds.length>0&&selectedIds.every(id=>{
         const item=elements.find(e=>e.id===id);
@@ -733,9 +822,9 @@ function App() {
     </>
 <button type="button" className="board-logout-bottom" onClick={logout} title="Return to password screen" aria-label="Log out">Log out</button></header>
     {stickerError&&<div className="sticker-global-error" role="alert">{stickerError}<button type="button" onClick={()=>setStickerError("")}>×</button></div>}
-    {selectedBoardIds.length>0&&<div className="selection-toolbar" aria-label="Selected items">{selectedBoardIds.length>0&&<button type="button" className="board-delete-selected" onClick={deleteSelectedBoardItems} aria-label="Delete selected items" title="Delete selected items">🗑 Delete{selectedBoardIds.length>1?" ("+selectedBoardIds.length+")":""}</button>}    {selectedVoiceId&&<div className={`voice-palette voice-palette-${theme}`} aria-label="Voice note appearance"><span>Voice color</span><div className="voice-palette-swatches">{[["default","Auto"],["violet","Purple"],["blue","Blue"],["rose","Pink"],["mint","Mint"]].map(([value,label])=><button key={value} type="button" className={"voice-swatch voice-swatch-"+value} title={label} aria-label={label} onClick={()=>{setVoiceHex("");setVoiceColor(value)}}>{value==="default"?"◐":""}</button>)}</div><label className="voice-custom-picker" title="Pick a custom color">✎ <input aria-label="Pick any color" type="color" value={/^#[0-9a-fA-F]{6}$/.test(voiceHex)?voiceHex:"#9274db"} onChange={e=>{setVoiceHex(e.target.value);setVoiceColor(e.target.value)}}/></label><form className="voice-hex-form" onSubmit={e=>{e.preventDefault();if(/^#[0-9a-fA-F]{6}$/.test(voiceHex))setVoiceColor(voiceHex)}}><input aria-label="Hex color" placeholder="#9274DB" maxLength={7} value={voiceHex} onChange={e=>setVoiceHex(e.target.value)} /><button type="submit" disabled={!/^#[0-9a-fA-F]{6}$/.test(voiceHex)}>Apply</button></form></div>}
+    {selectedBoardIds.length>0&&<div className="selection-toolbar" aria-label="Selected items"><button type="button" className="selection-lock" onClick={toggleSelectedLock} aria-label={selectionLocked?"Unlock selected items":"Lock selected items"}>{selectionLocked?"Unlock":"Lock"} ({selectedBoardIds.length})</button>{selectionLocked&&<span className="locked-selection-hint">Locked · selection only</span>}    {selectedVoiceId&&!selectionLocked&&<div className={`voice-palette voice-palette-${theme}`} aria-label="Voice note appearance"><span>Voice color</span><div className="voice-palette-swatches">{[["default","Auto"],["violet","Purple"],["blue","Blue"],["rose","Pink"],["mint","Mint"]].map(([value,label])=><button key={value} type="button" className={"voice-swatch voice-swatch-"+value} title={label} aria-label={label} onClick={()=>{setVoiceHex("");setVoiceColor(value)}}>{value==="default"?"◐":""}</button>)}</div><label className="voice-custom-picker" title="Pick a custom color">✎ <input aria-label="Pick any color" type="color" value={/^#[0-9a-fA-F]{6}$/.test(voiceHex)?voiceHex:"#9274db"} onChange={e=>{setVoiceHex(e.target.value);setVoiceColor(e.target.value)}}/></label><form className="voice-hex-form" onSubmit={e=>{e.preventDefault();if(/^#[0-9a-fA-F]{6}$/.test(voiceHex))setVoiceColor(voiceHex)}}><input aria-label="Hex color" placeholder="#9274DB" maxLength={7} value={voiceHex} onChange={e=>setVoiceHex(e.target.value)} /><button type="submit" disabled={!/^#[0-9a-fA-F]{6}$/.test(voiceHex)}>Apply</button></form></div>}
 </div>}
-    <div className={`board ${selectedVoiceId?"board-voice-selected":""}`}>
+    <div className={`board ${selectedVoiceId?"board-voice-selected":""} ${selectionLocked?"board-locked-selected":""}`}>
     <Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} name="Our Whiteboard" />
     <div className="voice-overlay">{voiceCards.map(e=><VoiceNoteCard key={e.id} element={e} theme={theme} viewport={viewport}/>)}</div><div className="music-overlay">{musicCards.map(e=><MusicCard key={e.id} element={e} theme={theme} viewport={viewport}/>)}</div>
     <div className="animated-stickers" aria-hidden="true">{sceneImages.filter(e=>String(e.fileId).endsWith(".gif")||(theme==="dark"&&imageSources[e.fileId])).map(e=>{

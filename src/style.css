@@ -67,3 +67,7 @@ html, body, #root { margin: 0; width: 100%; height: 100%; }
 .placed-sticker.sticker-selected>button {opacity:1}
 .sticker-resize-handle {display:none;position:absolute;right:-9px;bottom:-9px;width:16px;height:16px;border:2px solid white;border-radius:4px;background:#7069ff;cursor:nwse-resize;touch-action:none;box-shadow:0 1px 5px #0005}
 .placed-sticker.sticker-selected .sticker-resize-handle {display:block}
+
+/* GIFs are visual-only; Excalidraw's image elements handle selection and editing. */
+.animated-stickers {position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:11}
+.animated-stickers img {pointer-events:none;transform-origin:center center;user-select:none}

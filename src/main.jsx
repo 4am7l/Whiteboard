@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { Excalidraw } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import "./style.css";
+import "plyr/dist/plyr.css";
 
 function VoiceNoteCard({element,theme,viewport}){
   const audioRef=useRef(null);
@@ -38,43 +39,38 @@ function parseMusicLink(raw){
 }
 function MusicCard({element,theme,viewport,onMove,onResize}){
   const music=element.customData.music;
-  const [mode,setMode]=useState("audio"),[playing,setPlaying]=useState(false),[ready,setReady]=useState(false),[position,setPosition]=useState(0),[duration,setDuration]=useState(0),[volume,setVolume]=useState(80);
-  const frame=useRef(null),player=useRef(null),gesture=useRef(null);
+  const [mode,setMode]=useState("video"),[playing,setPlaying]=useState(false),[time,setTime]=useState(0),[duration,setDuration]=useState(0);
+  const mount=useRef(null),instance=useRef(null),gesture=useRef(null);
   const youtube=music.provider==="youtube";
   useEffect(()=>{
-    if(!youtube)return;
-    let cancelled=false;
-    const init=()=>{
-      if(cancelled||!frame.current||!window.YT?.Player)return;
-      const p=new window.YT.Player(frame.current,{videoId:music.id,playerVars:{playsinline:1,rel:0,controls:0,disablekb:1},events:{
-        onReady:e=>{if(cancelled)return;player.current=e.target;setReady(true);e.target.setVolume(80)},
-        onStateChange:e=>{if(!cancelled)setPlaying(e.data===window.YT.PlayerState.PLAYING)}
-      }});
-      player.current=p;
-    };
-    if(window.YT?.Player)init();
-    else{
-      const previous=window.onYouTubeIframeAPIReady;
-      window.onYouTubeIframeAPIReady=()=>{previous?.();init()};
-      if(!document.querySelector('script[data-youtube-iframe-api]')){const script=document.createElement("script");script.src="https://www.youtube.com/iframe_api";script.dataset.youtubeIframeApi="1";document.head.appendChild(script)}
-    }
-    return()=>{cancelled=true;try{player.current?.destroy?.()}catch{}player.current=null};
-  },[music.id,youtube]);
-  useEffect(()=>{if(!youtube||!ready)return;const timer=setInterval(()=>{try{setPosition(player.current?.getCurrentTime?.()||0);setDuration(player.current?.getDuration?.()||0)}catch{}},500);return()=>clearInterval(timer)},[youtube,ready]);
+    if(!youtube||!mount.current)return;
+    let disposed=false;
+    const host=document.createElement("div");
+    host.setAttribute("data-plyr-provider","youtube");host.setAttribute("data-plyr-embed-id",music.id);
+    mount.current.appendChild(host);
+    import("plyr").then(({default:Plyr})=>{
+      if(disposed)return;
+      const p=new Plyr(host,{controls:["play-large","play","progress","current-time","duration","mute","volume","settings","pip","fullscreen"],youtube:{noCookie:true,rel:0,modestbranding:1},resetOnEnd:false});
+      instance.current=p;
+      p.on("play",()=>setPlaying(true));p.on("pause",()=>setPlaying(false));
+      p.on("timeupdate",()=>{setTime(p.currentTime||0);setDuration(p.duration||0)});
+      p.on("ready",()=>setDuration(p.duration||0));
+    }).catch(err=>console.error("Plyr initialization failed",err));
+    return()=>{disposed=true;try{instance.current?.destroy()}catch{}instance.current=null;if(mount.current?.contains(host))mount.current.removeChild(host)};
+  },[youtube,music.id]);
   const fmt=t=>Number.isFinite(t)?Math.floor(t/60)+":"+String(Math.floor(t%60)).padStart(2,"0"):"0:00";
-  const toggle=()=>{if(!ready)return;playing?player.current.pauseVideo():player.current.playVideo()};
-  const begin=e=>{if(e.button!==0||e.target.closest("button,a,input,iframe,.music-video-stage"))return;e.preventDefault();e.stopPropagation();gesture.current={kind:"move",x:e.clientX,y:e.clientY,ox:element.x,oy:element.y};e.currentTarget.setPointerCapture(e.pointerId)};
+  const begin=e=>{if(e.button!==0||e.target.closest("button,a,input,.music-plyr-video,.music-resize-grip"))return;e.preventDefault();e.stopPropagation();gesture.current={kind:"move",x:e.clientX,y:e.clientY,ox:element.x,oy:element.y};e.currentTarget.setPointerCapture(e.pointerId)};
   const end=e=>{const g=gesture.current;if(!g)return;gesture.current=null;if(g.kind==="move")onMove(element.id,g.ox+(e.clientX-g.x)/viewport.zoom,g.oy+(e.clientY-g.y)/viewport.zoom)};
-  const resizeStart=e=>{e.stopPropagation();e.preventDefault();gesture.current={kind:"resize",x:e.clientX,y:e.clientY,w:element.width,h:element.height};e.currentTarget.setPointerCapture(e.pointerId)};
-  const resizeEnd=e=>{const g=gesture.current;if(!g||g.kind!=="resize")return;gesture.current=null;onResize(element.id,Math.max(260,g.w+(e.clientX-g.x)/viewport.zoom),Math.max(190,g.h+(e.clientY-g.y)/viewport.zoom))};
+  const resizeStart=e=>{e.preventDefault();e.stopPropagation();gesture.current={kind:"resize",x:e.clientX,y:e.clientY,w:element.width,h:element.height};e.currentTarget.setPointerCapture(e.pointerId)};
+  const resizeEnd=e=>{const g=gesture.current;if(!g||g.kind!=="resize")return;gesture.current=null;onResize(element.id,Math.max(280,g.w+(e.clientX-g.x)/viewport.zoom),Math.max(220,g.h+(e.clientY-g.y)/viewport.zoom))};
   const url=youtube?"https://www.youtube.com/watch?v="+music.id:music.provider==="spotify"?"https://open.spotify.com/track/"+music.id:music.url;
-  return <div className={`music-card music-card-${theme} music-card-${mode} music-card-modern`} data-music-element={element.id} onPointerDown={begin} onPointerUp={end} onPointerCancel={()=>gesture.current=null} style={{left:(element.x+viewport.x)*viewport.zoom,top:(element.y+viewport.y)*viewport.zoom,width:element.width*viewport.zoom,height:element.height*viewport.zoom,transform:`rotate(${element.angle||0}rad)`,opacity:(element.opacity??100)/100}}>
-    <div className="music-modern-top"><span className="music-modern-grip">⠿</span><span className="music-modern-label">MUSIC PLAYER</span><div className="music-modern-modes"><button type="button" className={mode==="audio"?"selected":""} onClick={()=>setMode("audio")}>♫ Music</button><button type="button" className={mode==="video"?"selected":""} onClick={()=>setMode("video")}>▣ Video</button></div><a href={url} target="_blank" rel="noopener noreferrer" title="Open source">↗</a></div>
-    {youtube?<><div className={`music-video-stage ${mode==="audio"?"music-video-off":""}`}><div ref={frame}/>{mode==="video"&&<button className="music-video-cover" onClick={toggle} aria-label={playing?"Pause":"Play"}>{playing?"Ⅱ":"▶"}</button>}</div>
-      <div className="music-modern-song"><div className="music-modern-cover">{music.thumbnail?<img src={music.thumbnail} alt="Album artwork"/>:<span>♫</span>}</div><div className="music-modern-track"><div className="music-modern-title" title={music.title}>{music.title||"Your song"}</div><div className="music-modern-artist">{music.channel||"Music"}</div><div className="music-modern-wave">{Array.from({length:45},(_,i)=><i key={i} style={{height:(5+Math.abs(Math.sin(i*1.7)*Math.cos(i*.53))*23)+"px",opacity:i/45<position/(duration||1)?1:.35}}/>)}</div></div></div>
-      <div className="music-modern-bottom"><input aria-label="Seek" type="range" min="0" max={Math.max(duration,1)} step="1" value={Math.min(position,duration||1)} onChange={e=>{player.current?.seekTo(Number(e.target.value),true);setPosition(Number(e.target.value))}}/><div className="music-modern-times"><span>{fmt(position)}</span><span>{fmt(duration)}</span></div><div className="music-modern-actions"><label title="Volume">◖ <input aria-label="Volume" type="range" min="0" max="100" value={volume} onChange={e=>{setVolume(Number(e.target.value));player.current?.setVolume?.(Number(e.target.value))}}/></label><button className="music-modern-play" type="button" disabled={!ready} onClick={toggle}>{playing?"Ⅱ":"▶"}</button><button type="button" title="Restart" onClick={()=>player.current?.seekTo(0,true)}>↺</button></div></div>
-    </>:<div className="music-modern-external"><div className="music-modern-title">{music.title||"Music"}</div><iframe title="Music player" src={music.provider==="spotify"?"https://open.spotify.com/embed/track/"+music.id:music.url} allow="autoplay;encrypted-media;fullscreen;picture-in-picture"/></div>}
-    <div className="music-modern-resize" title="Drag to resize" onPointerDown={resizeStart} onPointerUp={resizeEnd} onPointerCancel={()=>gesture.current=null}>◢</div>
+  return <div className={`music-card music-card-${theme} music-plyr-card music-plyr-${mode}`} data-music-element={element.id} onPointerDown={begin} onPointerUp={end} onPointerCancel={()=>gesture.current=null} style={{left:(element.x+viewport.x)*viewport.zoom,top:(element.y+viewport.y)*viewport.zoom,width:element.width*viewport.zoom,height:element.height*viewport.zoom,transform:`rotate(${element.angle||0}rad)`,opacity:(element.opacity??100)/100}}>
+    <div className="music-plyr-header"><span className="music-plyr-drag">⠿</span><span className="music-plyr-name" title={music.title}>{music.title||"Music"}</span><div className="music-plyr-switch"><button type="button" className={mode==="audio"?"on":""} onClick={()=>setMode("audio")}>♫ Song</button><button type="button" className={mode==="video"?"on":""} onClick={()=>setMode("video")}>▣ Video</button></div><a href={url} target="_blank" rel="noopener noreferrer" title="Open original">↗</a></div>
+    {youtube?<><div className={`music-plyr-video ${mode==="audio"?"music-plyr-video-audio":""}`}><div ref={mount}/></div>
+      {mode==="audio"&&<div className="music-plyr-song"><div className="music-plyr-cover">{music.thumbnail?<img src={music.thumbnail} alt="Cover"/>:"♫"}</div><div className="music-plyr-track"><strong>{music.title||"Song"}</strong><small>{music.channel||"YouTube Music"}</small></div><button type="button" className="music-plyr-play" onClick={()=>instance.current?.togglePlay()}>{playing?"Ⅱ":"▶"}</button></div>}
+      {mode==="audio"&&<div className="music-plyr-audio-controls"><input aria-label="Seek" type="range" min="0" max={Math.max(duration,1)} value={Math.min(time,duration||1)} onChange={e=>{if(instance.current)instance.current.currentTime=Number(e.target.value)}}/><span>{fmt(time)} / {fmt(duration)}</span><label>◖ <input aria-label="Volume" type="range" min="0" max="1" step=".01" defaultValue=".8" onChange={e=>{if(instance.current)instance.current.volume=Number(e.target.value)}}/></label></div>}
+    </>:<div className="music-plyr-fallback"><iframe title="Music" src={music.provider==="spotify"?"https://open.spotify.com/embed/track/"+music.id:music.url} allow="autoplay;encrypted-media;fullscreen;picture-in-picture"/></div>}
+    <div className="music-resize-grip" title="Resize card" onPointerDown={resizeStart} onPointerUp={resizeEnd} onPointerCancel={()=>gesture.current=null}>◢</div>
   </div>;
 }
 

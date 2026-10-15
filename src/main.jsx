@@ -32,6 +32,7 @@ function App() {
   const imageLoads=useRef(new Map());
   const [sceneImages,setSceneImages]=useState([]);
   const [voiceCards,setVoiceCards]=useState([]);
+  const [selectedVoiceId,setSelectedVoiceId]=useState(null);
   const [recording,setRecording]=useState(false);
   const [voiceBusy,setVoiceBusy]=useState(false);
   const recorderRef=useRef(null);
@@ -324,6 +325,13 @@ function App() {
     setStickerError("");
     return element;
   }
+  function setVoiceColor(color){
+    const editor=apiRef.current;if(!editor||!selectedVoiceId)return;
+    const elements=editor.getSceneElementsIncludingDeleted();
+    const next=elements.map(e=>e.id!==selectedVoiceId?e:{...e,customData:{...e.customData,voiceColor:color},version:(e.version||0)+1,versionNonce:Math.floor(Math.random()*2147483647),updated:Date.now()});
+    editor.updateScene({elements:next});
+    const changed=next.find(e=>e.id===selectedVoiceId);if(changed){pending.current.set(changed.id,changed);known.current.set(changed.id,changed.version)}
+  }
   function addVoiceCard(audioId){
     const editor=apiRef.current;
     if(!editor)throw Error("Board editor is not ready");
@@ -408,6 +416,8 @@ function App() {
     setSceneImages(old=>old.length===images.length&&old.every((e,i)=>e===images[i])?old:images);
     setVoiceCards(old=>old.length===voices.length&&old.every((e,i)=>e===voices[i])?old:voices);
     if (appState) {
+      const selected=elements.find(e=>e.customData?.voiceNoteId&&appState.selectedElementIds?.[e.id]);
+      setSelectedVoiceId(old=>old===(selected?.id||null)?old:(selected?.id||null));
       const next = { zoom: appState.zoom?.value || 1, x: appState.scrollX || 0, y: appState.scrollY || 0 };
       setViewport(old => old.zoom === next.zoom && old.x === next.x && old.y === next.y ? old : next);
     }
@@ -421,7 +431,7 @@ function App() {
   }
 
   if (!authorized) return <form className="login" onSubmit={login}><h1>Our Whiteboard ♡</h1><p>Enter our 6-digit code</p><input aria-label="6-digit code" type="password" inputMode="numeric" autoComplete="off" maxLength={6} pattern="[0-9]{6}" required value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ""))}/><button type="submit">Open board</button><p role="alert">{loginError}</p></form>;
-  return <main className="board"><div className="voice-controls"><button type="button" disabled={voiceBusy} onClick={recording?stopVoice:startVoice}>{voiceBusy?"Saving…":recording?"■ Stop voice":"🎙 Voice note"}</button>{recording&&<span className="voice-live">● Recording</span>}</div><button type="button" className={`theme-toggle ${theme === "dark" ? "theme-toggle--dark" : "theme-toggle--light"}`} title="Change theme" onClick={toggleTheme} aria-label="Toggle dark mode">{theme === "dark" ? "☀️ Light" : "🌙 Dark"}</button><div className="pattern-controls">
+  return <main className="board"><div className="voice-controls"><button type="button" disabled={voiceBusy} onClick={recording?stopVoice:startVoice}>{voiceBusy?"Saving…":recording?"■ Stop voice":"🎙 Voice note"}</button>{recording&&<span className="voice-live">● Recording</span>}{selectedVoiceId&&<div className="voice-colors" aria-label="Voice card colors">{[["default","Auto"],["violet","Purple"],["blue","Blue"],["rose","Pink"],["mint","Mint"]].map(([value,label])=><button key={value} type="button" className={"voice-swatch voice-swatch-"+value} title={label} aria-label={label} onClick={()=>setVoiceColor(value)}>{value==="default"?"◐":""}</button>)}</div>}</div><button type="button" className={`theme-toggle ${theme === "dark" ? "theme-toggle--dark" : "theme-toggle--light"}`} title="Change theme" onClick={toggleTheme} aria-label="Toggle dark mode">{theme === "dark" ? "☀️ Light" : "🌙 Dark"}</button><div className="pattern-controls">
       <button type="button" className={`pattern-button ${theme === "dark" ? "pattern-dark" : "pattern-light"}`} onClick={() => setPatternMenu(v => !v)} aria-expanded={patternMenu} aria-label="Board background">▦ Background</button>
       {patternMenu && <div className={`pattern-menu ${theme === "dark" ? "pattern-dark" : "pattern-light"}`}>
         {[["none", "Blank"], ["lines", "Horizontal lines"], ["squares", "Small squares"], ["dots", "Small dots"], ["graph", "Graph paper"]].map(([id, label]) =>
@@ -452,7 +462,7 @@ function App() {
     </section>,libraryHost)}
     {stickerError&&<div className="sticker-global-error" role="alert">{stickerError}<button type="button" onClick={()=>setStickerError("")}>×</button></div>}
     <Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} name="Our Whiteboard" />
-    <div className="voice-overlay">{voiceCards.map(e=><div className="voice-card" key={e.id} data-voice-element={e.id} style={{left:(e.x+viewport.x)*viewport.zoom,top:(e.y+viewport.y)*viewport.zoom,width:e.width*viewport.zoom,height:e.height*viewport.zoom,transform:`rotate(${e.angle||0}rad)`,opacity:(e.opacity??100)/100}}><div className="voice-card-shine"/><div className="voice-card-header"><span className="voice-card-icon">♫</span><span className="voice-card-title">Voice message<small>Tap play to listen</small></span><span className="voice-card-sparkle">✦</span></div><audio controls preload="none" src={"/api/voice-notes?id="+encodeURIComponent(e.customData.voiceNoteId)}/></div>)}</div>
+    <div className="voice-overlay">{voiceCards.map(e=><div className={`voice-card voice-card-${theme} voice-tint-${e.customData?.voiceColor||"default"}`} key={e.id} data-voice-element={e.id} style={{left:(e.x+viewport.x)*viewport.zoom,top:(e.y+viewport.y)*viewport.zoom,width:e.width*viewport.zoom,height:e.height*viewport.zoom,transform:`rotate(${e.angle||0}rad)`,opacity:(e.opacity??100)/100}}><div className="voice-card-shine"/><div className="voice-card-header"><span className="voice-card-icon">♫</span><span className="voice-card-title">Voice message<small>Tap play to listen</small></span><span className="voice-card-sparkle">✦</span></div><audio controls preload="none" src={"/api/voice-notes?id="+encodeURIComponent(e.customData.voiceNoteId)}/></div>)}</div>
     <div className="animated-stickers" aria-hidden="true">{sceneImages.filter(e=>e.fileId.endsWith(".gif")).map(e=>{
       const id=e.fileId.slice(8);
       const scale=e.scale||[1,1];

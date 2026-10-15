@@ -180,3 +180,10 @@ html, body, #root { margin: 0; width: 100%; height: 100%; }
 .sticker-library-inline{position:relative;z-index:95}
 .sticker-library-content{position:relative;z-index:96}
 .voice-palette{z-index:100;bottom:14px;right:14px}
+
+/* Open sticker options UPWARD from the existing sidebar trigger, over board controls. */
+.sticker-library-inline.sticker-library-open{position:relative;overflow:visible;z-index:120}
+.sticker-library-open .sticker-library-content{position:absolute;left:0;bottom:calc(100% + 8px);width:100%;box-sizing:border-box;max-height:min(56vh,490px);overflow-y:auto;padding:12px;border-radius:12px;background:#fff;color:#25252b;box-shadow:0 12px 32px #0004;z-index:121}
+.sticker-library-open.pattern-dark .sticker-library-content{background:#232329;color:#f3f3f5}
+.sticker-library-open.pattern-light .sticker-library-content{background:#fff;color:#25252b}
+.sticker-library-open .sticker-library-content .sticker-grid{max-height:230px}

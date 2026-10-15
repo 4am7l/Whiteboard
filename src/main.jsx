@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { createPortal } from "react-dom";
 import { Excalidraw } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import "./style.css";
+import "./layout.css";
 import { STICKER_PACKS, getStickerPackItems } from "./stickerPacks";
 
 function VoiceNoteCard({element,theme,viewport}){
@@ -83,7 +83,6 @@ function App() {
     try { return localStorage.getItem("whiteboard-pattern") || "none"; } catch { return "none"; }
   });
   const [patternMenu, setPatternMenu] = useState(false);
-  const [toolsOpen,setToolsOpen]=useState(false);
   const [viewport, setViewport] = useState({ zoom: 1, x: 0, y: 0 });
   const [stickerMenu,setStickerMenu]=useState(false);
   const [searchQuery,setSearchQuery]=useState("");
@@ -285,31 +284,30 @@ function App() {
     };
   }, [api, authorized]);
 
-  // Keep media on the canvas visible, but never let it cover an open Excalidraw sidebar.
   useEffect(()=>{
     if(!authorized)return;
-    const board=document.querySelector(".board");
-    if(!board)return;
-    const update=()=>{
-      const boardRect=board.getBoundingClientRect();
-      let left=0,right=0;
-      const candidates=board.querySelectorAll('.excalidraw .sidebar, .excalidraw [data-testid="sidebar"], .excalidraw .library-menu, .excalidraw .layer-ui__library, .excalidraw .App-menu_left .Island, .excalidraw .App-menu_left .App-menu__left, .excalidraw .App-menu_left .panelColumn, .excalidraw .App-menu_left .properties-content, .excalidraw .App-menu_left .App-menu__left__content');
-      for(const node of candidates){
-        const rect=node.getBoundingClientRect();
-        if(rect.width<140||rect.height<120||rect.width>boardRect.width*.65||rect.bottom<=boardRect.top||rect.top>=boardRect.bottom)continue;
-        if(getComputedStyle(node).visibility==="hidden"||getComputedStyle(node).display==="none")continue;
-        if(rect.right>=boardRect.right-24)right=Math.max(right,boardRect.right-rect.left);
-        if(rect.left<=boardRect.left+24)left=Math.max(left,rect.right-boardRect.left);
-      }
-      board.style.setProperty("--media-clip-right",Math.max(0,right)+"px");
-      board.style.setProperty("--media-clip-left",Math.max(0,left)+"px");
-    };
-    const observer=new MutationObserver(update);
-    observer.observe(board,{childList:true,subtree:true,attributes:true,attributeFilter:["class","style","data-state"]});
-    window.addEventListener("resize",update);
-    update();
-    return()=>{observer.disconnect();window.removeEventListener("resize",update)};
+    const toolbar=document.querySelector(".workspace-toolbar");
+    if(!toolbar)return;
+    const measure=()=>toolbar.parentElement.style.setProperty("--toolbar-bottom",`${toolbar.getBoundingClientRect().bottom+8}px`);
+    const observer=new ResizeObserver(measure);observer.observe(toolbar);measure();
+    return()=>observer.disconnect();
   },[authorized]);
+
+  // Only one auxiliary panel is open; Escape and outside taps dismiss it.
+  function closePanels(){setStickerMenu(false);setMusicOpen(false);setPatternMenu(false)}
+  function togglePanel(panel){
+    setStickerMenu(panel === "stickers" && !stickerMenu);
+    setMusicOpen(panel === "music" && !musicOpen);
+    setPatternMenu(panel === "background" && !patternMenu);
+  }
+  useEffect(()=>{
+    if(!stickerMenu&&!musicOpen&&!patternMenu)return;
+    const dismiss=e=>{if(!e.target.closest(".workspace-toolbar"))closePanels()};
+    const escape=e=>{if(e.key==="Escape")closePanels()};
+    document.addEventListener("pointerdown",dismiss);
+    document.addEventListener("keydown",escape);
+    return()=>{document.removeEventListener("pointerdown",dismiss);document.removeEventListener("keydown",escape)};
+  },[stickerMenu,musicOpen,patternMenu]);
   async function searchGiphy(event) {
     event.preventDefault();
     if(!searchQuery.trim())return;
@@ -502,8 +500,8 @@ function App() {
     const fileId="sticker:"+sticker.id;
     try{await loadImageFile(fileId)}catch(e){setStickerError(e.message);return}
     const state=api.getAppState(),zoom=state.zoom?.value||1;
-    const x=legacy?.x??(window.innerWidth/2)/zoom-(state.scrollX||0)-75;
-    const y=legacy?.y??(window.innerHeight/2)/zoom-(state.scrollY||0)-75;
+    const x=legacy?.x??(state.width/2)/zoom-(state.scrollX||0)-75;
+    const y=legacy?.y??(state.height/2)/zoom-(state.scrollY||0)-75;
     const width=legacy?.width||150;
     const files=api.getFiles(),data=files[fileId];
     if(!data?.dataURL){setStickerError("Image data was not loaded");return null}
@@ -556,7 +554,7 @@ function App() {
     const editor=apiRef.current;if(!editor){setMusicError("Board editor is not ready");return}
     const state=editor.getAppState(),zoom=state.zoom?.value||1,width=displayMode==="audio"?310:400,height=displayMode==="audio"?98:265;
     const id=crypto.randomUUID();
-    const element={id,type:"rectangle",x:(window.innerWidth/2)/zoom-(state.scrollX||0)-width/2,y:(window.innerHeight/2)/zoom-(state.scrollY||0)-height/2,width,height,angle:0,strokeColor:"transparent",backgroundColor:"transparent",fillStyle:"solid",strokeWidth:2,strokeStyle:"solid",roughness:0,opacity:100,groupIds:[],frameId:null,roundness:{type:3},seed:Math.floor(Math.random()*2147483647),version:1,versionNonce:Math.floor(Math.random()*2147483647),isDeleted:false,boundElements:null,updated:Date.now(),link:null,locked:false,customData:{music:{...music,title,displayMode,thumbnail,channel}}};
+    const element={id,type:"rectangle",x:(state.width/2)/zoom-(state.scrollX||0)-width/2,y:(state.height/2)/zoom-(state.scrollY||0)-height/2,width,height,angle:0,strokeColor:"transparent",backgroundColor:"transparent",fillStyle:"solid",strokeWidth:2,strokeStyle:"solid",roughness:0,opacity:100,groupIds:[],frameId:null,roundness:{type:3},seed:Math.floor(Math.random()*2147483647),version:1,versionNonce:Math.floor(Math.random()*2147483647),isDeleted:false,boundElements:null,updated:Date.now(),link:null,locked:false,customData:{music:{...music,title,displayMode,thumbnail,channel}}};
     editor.updateScene({elements:[...editor.getSceneElementsIncludingDeleted(),element],appState:{selectedElementIds:{[id]:true}}});
     pending.current.set(id,element);known.current.set(id,1);setMusicCards(old=>[...old,element]);setMusicOpen(false);setMusicError("");
   }
@@ -579,8 +577,8 @@ function App() {
     if(!editor)throw Error("Board editor is not ready");
     const state=editor.getAppState(),zoom=state.zoom?.value||1;
     const width=240,height=76;
-    const x=(window.innerWidth/2)/zoom-(state.scrollX||0)-width/2;
-    const y=(window.innerHeight/2)/zoom-(state.scrollY||0)-height/2;
+    const x=(state.width/2)/zoom-(state.scrollX||0)-width/2;
+    const y=(state.height/2)/zoom-(state.scrollY||0)-height/2;
     const id=crypto.randomUUID();
     const element={id,type:"rectangle",x,y,width,height,angle:0,strokeColor:"transparent",backgroundColor:"transparent",fillStyle:"solid",strokeWidth:2,strokeStyle:"solid",roughness:0,opacity:100,groupIds:[],frameId:null,roundness:{type:3},seed:Math.floor(Math.random()*2147483647),version:1,versionNonce:Math.floor(Math.random()*2147483647),isDeleted:false,boundElements:null,updated:Date.now(),link:null,locked:false,customData:{voiceNoteId:audioId}};
     editor.updateScene({elements:[...editor.getSceneElementsIncludingDeleted(),element],appState:{selectedElementIds:{[id]:true}}});
@@ -697,9 +695,9 @@ function App() {
   }
 
   if (!authorized) return <form className="login" onSubmit={login}><h1>Our Whiteboard ♡</h1><p>Enter our 6-digit code</p><input aria-label="6-digit code" type="password" inputMode="numeric" autoComplete="off" maxLength={6} pattern="[0-9]{6}" required value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ""))}/><button type="submit">Open board</button><p role="alert">{loginError}</p></form>;
-  return <main className={`board ${selectedVoiceId?"board-voice-selected":""}`}><div className="music-controls"><button type="button" onClick={()=>setMusicOpen(v=>!v)}>♫ Music</button>{musicOpen&&<section className={"music-panel music-panel-"+theme}><form onSubmit={searchMusic}><input aria-label="Song name or link" placeholder="Song name or YouTube / Spotify URL" value={musicInput} onChange={e=>setMusicInput(e.target.value)}/><button type="submit" disabled={musicBusy}>{musicBusy?"Searching…":"Search / Add"}</button></form>{musicError&&<small role="alert">{musicError}</small>}<div className="music-results">{musicResults.map(item=><div key={item.id} className="music-result">{item.thumbnail&&<img src={item.thumbnail} alt=""/>}<div><strong>{item.title}</strong><small>{item.channel}</small><div className="music-add-options"><button type="button" onClick={()=>addMusicCard("https://www.youtube.com/watch?v="+item.id,item.title,"audio",item.thumbnail,item.channel)}>Add audio</button><button type="button" onClick={()=>addMusicCard("https://www.youtube.com/watch?v="+item.id,item.title,"video",item.thumbnail,item.channel)}>Add video</button></div></div></div>)}</div><small>Choose Audio for a compact song card, or Video for the YouTube player. Some videos restrict embedding.</small></section>}</div><div className="voice-controls"><button type="button" disabled={voiceBusy} onClick={recording?stopVoice:startVoice}>{voiceBusy?"Saving…":recording?"■ Stop voice":"🎙 Voice note"}</button>{recording&&<span className="voice-live">● Recording</span>}</div><button type="button" className={`theme-toggle ${theme==="dark"?"theme-toggle--dark":"theme-toggle--light"}`} title="Change theme" onClick={toggleTheme} aria-label="Toggle dark mode">{theme==="dark"?"☀️ Light":"🌙 Dark"}</button><div className="pattern-controls"><button type="button" className={`pattern-button ${theme==="dark"?"pattern-dark":"pattern-light"}`} onClick={()=>setPatternMenu(v=>!v)} aria-expanded={patternMenu}>▦ Background</button>{patternMenu&&<div className={`pattern-menu ${theme==="dark"?"pattern-dark":"pattern-light"}`}>{[["none","Blank"],["lines","Horizontal lines"],["squares","Small squares"],["dots","Dots"],["graph","Graph paper"]].map(([id,label])=><button type="button" key={id} className={pattern===id?"selected":""} onClick={()=>choosePattern(id)}>{label}</button>)}</div>}</div>
-    {createPortal(<>
-    <button type="button" className="doodle-panel-trigger" onClick={()=>setStickerMenu(v=>!v)} aria-expanded={stickerMenu}>♡ Stickers</button>
+  return <main className={`workspace workspace-${theme}`}><header className="workspace-toolbar" aria-label="Board tools"><div className="music-controls"><button type="button" aria-expanded={musicOpen} onClick={()=>togglePanel("music")}>♫ Music</button>{musicOpen&&<section aria-label="Add music" className={"music-panel music-panel-"+theme}><button className="panel-close" type="button" onClick={()=>setMusicOpen(false)} aria-label="Close music">×</button><form onSubmit={searchMusic}><input aria-label="Song name or link" placeholder="Song name or YouTube / Spotify URL" value={musicInput} onChange={e=>setMusicInput(e.target.value)}/><button type="submit" disabled={musicBusy}>{musicBusy?"Searching…":"Search / Add"}</button></form>{musicError&&<small role="alert">{musicError}</small>}<div className="music-results">{musicResults.map(item=><div key={item.id} className="music-result">{item.thumbnail&&<img src={item.thumbnail} alt=""/>}<div><strong>{item.title}</strong><small>{item.channel}</small><div className="music-add-options"><button type="button" onClick={()=>addMusicCard("https://www.youtube.com/watch?v="+item.id,item.title,"audio",item.thumbnail,item.channel)}>Add audio</button><button type="button" onClick={()=>addMusicCard("https://www.youtube.com/watch?v="+item.id,item.title,"video",item.thumbnail,item.channel)}>Add video</button></div></div></div>)}</div><small>Choose Audio for a compact song card, or Video for the YouTube player. Some videos restrict embedding.</small></section>}</div><div className="voice-controls"><button type="button" disabled={voiceBusy} onClick={recording?stopVoice:startVoice}>{voiceBusy?"Saving…":recording?"■ Stop voice":"🎙 Voice note"}</button>{recording&&<span className="voice-live">● Recording</span>}</div><button type="button" className={`theme-toggle ${theme==="dark"?"theme-toggle--dark":"theme-toggle--light"}`} title="Change theme" onClick={toggleTheme} aria-label="Toggle dark mode">{theme==="dark"?"☀️ Light":"🌙 Dark"}</button><div className="pattern-controls"><button type="button" className={`pattern-button ${theme==="dark"?"pattern-dark":"pattern-light"}`} onClick={()=>togglePanel("background")} aria-expanded={patternMenu}>▦ Background</button>{patternMenu&&<div className={`pattern-menu ${theme==="dark"?"pattern-dark":"pattern-light"}`}>{[["none","Blank"],["lines","Horizontal lines"],["squares","Small squares"],["dots","Dots"],["graph","Graph paper"]].map(([id,label])=><button type="button" key={id} className={pattern===id?"selected":""} onClick={()=>choosePattern(id)}>{label}</button>)}</div>}</div>
+    <>
+    <button type="button" className="doodle-panel-trigger" onClick={()=>togglePanel("stickers")} aria-expanded={stickerMenu}>♡ Stickers</button>
     {stickerMenu&&<section className={`sticker-library-inline doodle-panel ${theme==="dark"?"pattern-dark":"pattern-light"}`}>
       <button type="button" className="doodle-panel-close" onClick={()=>setStickerMenu(false)} aria-label="Close stickers">×</button>
       <div className="sticker-library-content">
@@ -732,10 +730,13 @@ function App() {
         {stickerError&&<small role="alert">{stickerError}</small>}
       </div>
     </section>}
-    </>, document.body)}
+    </>
+<button type="button" className="board-logout-bottom" onClick={logout} title="Return to password screen" aria-label="Log out">Log out</button></header>
     {stickerError&&<div className="sticker-global-error" role="alert">{stickerError}<button type="button" onClick={()=>setStickerError("")}>×</button></div>}
-    {selectedVoiceId&&<div className={`voice-palette voice-palette-${theme}`} aria-label="Voice note appearance"><span>Voice color</span><div className="voice-palette-swatches">{[["default","Auto"],["violet","Purple"],["blue","Blue"],["rose","Pink"],["mint","Mint"]].map(([value,label])=><button key={value} type="button" className={"voice-swatch voice-swatch-"+value} title={label} aria-label={label} onClick={()=>{setVoiceHex("");setVoiceColor(value)}}>{value==="default"?"◐":""}</button>)}</div><label className="voice-custom-picker" title="Pick a custom color">✎ <input aria-label="Pick any color" type="color" value={/^#[0-9a-fA-F]{6}$/.test(voiceHex)?voiceHex:"#9274db"} onChange={e=>{setVoiceHex(e.target.value);setVoiceColor(e.target.value)}}/></label><form className="voice-hex-form" onSubmit={e=>{e.preventDefault();if(/^#[0-9a-fA-F]{6}$/.test(voiceHex))setVoiceColor(voiceHex)}}><input aria-label="Hex color" placeholder="#9274DB" maxLength={7} value={voiceHex} onChange={e=>setVoiceHex(e.target.value)} /><button type="submit" disabled={!/^#[0-9a-fA-F]{6}$/.test(voiceHex)}>Apply</button></form></div>}
-    <Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} name="Our Whiteboard" />{selectedBoardIds.length>0&&<button type="button" className="board-delete-selected" onClick={deleteSelectedBoardItems} aria-label="Delete selected items" title="Delete selected items">🗑 Delete{selectedBoardIds.length>1?" ("+selectedBoardIds.length+")":""}</button>}
+    {selectedBoardIds.length>0&&<div className="selection-toolbar" aria-label="Selected items">{selectedBoardIds.length>0&&<button type="button" className="board-delete-selected" onClick={deleteSelectedBoardItems} aria-label="Delete selected items" title="Delete selected items">🗑 Delete{selectedBoardIds.length>1?" ("+selectedBoardIds.length+")":""}</button>}    {selectedVoiceId&&<div className={`voice-palette voice-palette-${theme}`} aria-label="Voice note appearance"><span>Voice color</span><div className="voice-palette-swatches">{[["default","Auto"],["violet","Purple"],["blue","Blue"],["rose","Pink"],["mint","Mint"]].map(([value,label])=><button key={value} type="button" className={"voice-swatch voice-swatch-"+value} title={label} aria-label={label} onClick={()=>{setVoiceHex("");setVoiceColor(value)}}>{value==="default"?"◐":""}</button>)}</div><label className="voice-custom-picker" title="Pick a custom color">✎ <input aria-label="Pick any color" type="color" value={/^#[0-9a-fA-F]{6}$/.test(voiceHex)?voiceHex:"#9274db"} onChange={e=>{setVoiceHex(e.target.value);setVoiceColor(e.target.value)}}/></label><form className="voice-hex-form" onSubmit={e=>{e.preventDefault();if(/^#[0-9a-fA-F]{6}$/.test(voiceHex))setVoiceColor(voiceHex)}}><input aria-label="Hex color" placeholder="#9274DB" maxLength={7} value={voiceHex} onChange={e=>setVoiceHex(e.target.value)} /><button type="submit" disabled={!/^#[0-9a-fA-F]{6}$/.test(voiceHex)}>Apply</button></form></div>}
+</div>}
+    <div className={`board ${selectedVoiceId?"board-voice-selected":""}`}>
+    <Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} name="Our Whiteboard" />
     <div className="voice-overlay">{voiceCards.map(e=><VoiceNoteCard key={e.id} element={e} theme={theme} viewport={viewport}/>)}</div><div className="music-overlay">{musicCards.map(e=><MusicCard key={e.id} element={e} theme={theme} viewport={viewport}/>)}</div>
     <div className="animated-stickers" aria-hidden="true">{sceneImages.filter(e=>String(e.fileId).endsWith(".gif")||(theme==="dark"&&imageSources[e.fileId])).map(e=>{
       const isGif=String(e.fileId).endsWith(".gif");
@@ -748,11 +749,11 @@ function App() {
         transform:`rotate(${e.angle||0}rad) scale(${scale[0]},${scale[1]})`,opacity:(e.opacity??100)/100
       }}/>;
     })}</div>
-    <button type="button" className="board-logout-bottom" onClick={logout} title="Return to password screen" aria-label="Log out">Log out</button>
+
     {pattern !== "none" && <div className={`board-pattern pattern-${pattern} pattern-${theme}`} aria-hidden="true" style={{
       "--pattern-size": `${(pattern === "graph" ? 10 : 20) * viewport.zoom}px`,
       "--pattern-x": `${viewport.x * viewport.zoom}px`,
       "--pattern-y": `${viewport.y * viewport.zoom}px`
-    }} />}</main>;
+    }} />}</div></main>;
 }
 createRoot(document.getElementById("root")).render(<App />);

@@ -394,3 +394,19 @@ html, body, #root { margin: 0; width: 100%; height: 100%; }
 .excalidraw .sidebar[data-name="library"],
 .excalidraw .library-menu,
 .excalidraw .layer-ui__library {display:none!important}
+
+/* Replace native Library toolbar action with our Stickers action in the same spot. */
+.excalidraw .layer-ui__wrapper__top-right .sidebar-trigger,
+.excalidraw .layer-ui__wrapper__top-right [data-testid="sidebar-trigger"],
+.excalidraw .layer-ui__wrapper__top-right [data-testid="library-button"],
+.excalidraw .layer-ui__wrapper__top-right button[aria-label*="Library"],
+.excalidraw .layer-ui__wrapper__top-right button[title*="Library"],
+.excalidraw .App-toolbar__extra-tools-trigger[data-testid="library-button"],
+.excalidraw [data-testid="library-menu-trigger"],
+.excalidraw [data-testid="library-button"],
+.excalidraw button[aria-label="Library"],
+.excalidraw button[title="Library"]{display:none!important}
+.doodle-panel-trigger{top:16px!important;right:16px!important;z-index:120!important;border-radius:10px!important;background:#a99bff!important;color:#20202b!important;min-height:42px;padding:9px 15px!important}
+@media(max-width:600px){.doodle-panel-trigger{top:16px!important;right:12px!important;min-height:40px}}
+.doodle-panel{top:70px!important}
+@media(max-width:600px){.doodle-panel{top:65px!important}}

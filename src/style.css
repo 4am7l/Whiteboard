@@ -8,3 +8,19 @@ html, body, #root { margin: 0; width: 100%; height: 100%; }
 
 .theme-toggle--dark { background: #232329; color: #f3f3f5; border-color: #55545d; box-shadow: 0 2px 6px #0005; }
 .theme-toggle--light { background: #fff; color: #25252b; border-color: #d5d5dc; box-shadow: 0 2px 6px #0002; }
+
+/* Background patterns follow the Excalidraw canvas pan and zoom. */
+.board-pattern { position: absolute; inset: 0; pointer-events: none; z-index: 1; background-position: var(--pattern-x) var(--pattern-y); background-size: var(--pattern-size) var(--pattern-size); }
+.pattern-light { --pattern-color: rgba(90,110,140,.20); --pattern-strong: rgba(90,110,140,.30); }
+.pattern-dark { --pattern-color: rgba(200,210,240,.17); --pattern-strong: rgba(200,210,240,.26); }
+.pattern-lines { background-image: linear-gradient(to bottom, transparent calc(100% - 1px), var(--pattern-color) calc(100% - 1px)); }
+.pattern-squares { background-image: linear-gradient(to right, var(--pattern-color) 1px, transparent 1px), linear-gradient(to bottom, var(--pattern-color) 1px, transparent 1px); }
+.pattern-dots { background-image: radial-gradient(circle, var(--pattern-strong) 1.3px, transparent 1.6px); }
+.pattern-graph { background-image: linear-gradient(to right, var(--pattern-color) 1px, transparent 1px), linear-gradient(to bottom, var(--pattern-color) 1px, transparent 1px); }
+.pattern-controls { position: absolute; z-index: 31; left: 14px; bottom: 112px; font: 13px system-ui; }
+.pattern-button { padding: 7px 11px; border-radius: 8px; border: 1px solid #8886; cursor: pointer; }
+.pattern-menu { position: absolute; left: 0; bottom: 38px; width: 175px; border-radius: 9px; padding: 5px; border: 1px solid #8886; box-shadow: 0 4px 15px #0003; display: grid; gap: 2px; }
+.pattern-menu button { background: transparent; color: inherit; text-align: left; padding: 8px; border: 0; border-radius: 5px; cursor: pointer; }
+.pattern-menu button:hover, .pattern-menu button.selected { background: #8883; }
+.pattern-controls .pattern-dark { background: #232329; color: #f3f3f5; }
+.pattern-controls .pattern-light { background: #fff; color: #25252b; }

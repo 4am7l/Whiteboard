@@ -1,11 +1,11 @@
 const encoder = new TextEncoder();
 export async function onRequestGet({ env }) {
-  if (!env.LIVE_SECRET || !env.LIVE_WORKER_URL) {
+  if (!env.LIVE_SECRET) {
     return Response.json({ error: "Live sync not configured" }, { status: 503 });
   }
   let worker;
   try {
-    worker = new URL(env.LIVE_WORKER_URL);
+    worker = new URL("https://whiteboard-live.aryamwithmohammad.workers.dev/");
     if (worker.protocol !== "https:" || !worker.hostname.endsWith(".workers.dev") && !worker.hostname.endsWith(".cloudflareworkers.com")) throw Error("Invalid worker URL");
   } catch {
     return Response.json({ error: "Invalid live worker URL" }, { status: 503 });

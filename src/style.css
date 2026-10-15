@@ -373,3 +373,15 @@ html, body, #root { margin: 0; width: 100%; height: 100%; }
 .doodle-grid{max-height:290px!important;overflow-y:auto!important}
 .doodle-grid button{min-width:0}
 .doodle-grid img{width:100%;height:100%;object-fit:contain}
+
+/* Replace Excalidraw's unused library content with the sticker browser. */
+.library-menu:has(> .sticker-library-inline) > :not(.sticker-library-inline),
+.layer-ui__library:has(> .sticker-library-inline) > :not(.sticker-library-inline),
+[data-testid="library-menu"]:has(> .sticker-library-inline) > :not(.sticker-library-inline),
+.sidebar[data-name="library"]:has(> .sticker-library-inline) > :not(.sticker-library-inline){display:none!important}
+.library-menu:has(> .sticker-library-inline),
+.layer-ui__library:has(> .sticker-library-inline),
+[data-testid="library-menu"]:has(> .sticker-library-inline),
+.sidebar[data-name="library"]:has(> .sticker-library-inline){overflow-y:auto!important}
+.sticker-library-inline{border-top:0!important;max-height:none!important;overflow:visible!important;min-height:100%;box-sizing:border-box}
+.sticker-library-inline .sticker-library-content{padding-top:0}

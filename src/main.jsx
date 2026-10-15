@@ -109,6 +109,7 @@ function App() {
   const [musicBusy,setMusicBusy]=useState(false);
   const [musicError,setMusicError]=useState("");
   const [selectedVoiceId,setSelectedVoiceId]=useState(null);
+  const [selectedBoardIds,setSelectedBoardIds]=useState([]);
   const [voiceHex,setVoiceHex]=useState("");
   const [recording,setRecording]=useState(false);
   const [voiceBusy,setVoiceBusy]=useState(false);
@@ -452,6 +453,27 @@ function App() {
     setStickerError("");
     return element;
   }
+  function deleteSelectedBoardItems(){
+    const editor=apiRef.current;
+    if(!editor)return;
+    const selected=editor.getAppState()?.selectedElementIds||{};
+    const ids=Object.keys(selected).filter(id=>selected[id]);
+    if(!ids.length)return;
+    const idSet=new Set(ids);
+    const now=Date.now();
+    const next=editor.getSceneElementsIncludingDeleted().map(element=>{
+      if(!idSet.has(element.id)||element.isDeleted)return element;
+      return {...element,isDeleted:true,version:(element.version||0)+1,versionNonce:Math.floor(Math.random()*2147483647),updated:now};
+    });
+    editor.updateScene({elements:next,appState:{selectedElementIds:{}}});
+    for(const element of next){
+      if(!idSet.has(element.id)||!element.isDeleted)continue;
+      pending.current.set(element.id,element);
+      known.current.set(element.id,element.version||1);
+    }
+    setSelectedBoardIds([]);
+    setSelectedVoiceId(null);
+  }
   function setVoiceColor(color){
     const editor=apiRef.current;if(!editor||!selectedVoiceId)return;
     const elements=editor.getSceneElementsIncludingDeleted();
@@ -586,6 +608,7 @@ function App() {
     setMusicCards(old=>old.length===musics.length&&old.every((e,i)=>e===musics[i])?old:musics);
     if (appState) {
       const selectedIds=Object.keys(appState.selectedElementIds||{}).filter(id=>appState.selectedElementIds[id]);
+      setSelectedBoardIds(old=>old.length===selectedIds.length&&old.every(id=>selectedIds.includes(id))?old:selectedIds);
       const mediaOnly=selectedIds.length>0&&selectedIds.every(id=>{
         const item=elements.find(e=>e.id===id);
         return item&&!item.isDeleted&&(item.customData?.voiceNoteId||item.customData?.music?.id);
@@ -631,7 +654,7 @@ function App() {
     </section>,libraryHost)}
     {stickerError&&<div className="sticker-global-error" role="alert">{stickerError}<button type="button" onClick={()=>setStickerError("")}>×</button></div>}
     {selectedVoiceId&&<div className={`voice-palette voice-palette-${theme}`} aria-label="Voice note appearance"><span>Voice color</span><div className="voice-palette-swatches">{[["default","Auto"],["violet","Purple"],["blue","Blue"],["rose","Pink"],["mint","Mint"]].map(([value,label])=><button key={value} type="button" className={"voice-swatch voice-swatch-"+value} title={label} aria-label={label} onClick={()=>{setVoiceHex("");setVoiceColor(value)}}>{value==="default"?"◐":""}</button>)}</div><label className="voice-custom-picker" title="Pick a custom color">✎ <input aria-label="Pick any color" type="color" value={/^#[0-9a-fA-F]{6}$/.test(voiceHex)?voiceHex:"#9274db"} onChange={e=>{setVoiceHex(e.target.value);setVoiceColor(e.target.value)}}/></label><form className="voice-hex-form" onSubmit={e=>{e.preventDefault();if(/^#[0-9a-fA-F]{6}$/.test(voiceHex))setVoiceColor(voiceHex)}}><input aria-label="Hex color" placeholder="#9274DB" maxLength={7} value={voiceHex} onChange={e=>setVoiceHex(e.target.value)} /><button type="submit" disabled={!/^#[0-9a-fA-F]{6}$/.test(voiceHex)}>Apply</button></form></div>}
-    <Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} name="Our Whiteboard" />
+    <Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} name="Our Whiteboard" />{selectedBoardIds.length>0&&<button type="button" className="board-delete-selected" onClick={deleteSelectedBoardItems} aria-label="Delete selected items" title="Delete selected items">🗑 Delete{selectedBoardIds.length>1?" ("+selectedBoardIds.length+")":""}</button>}
     <div className="voice-overlay">{voiceCards.map(e=><VoiceNoteCard key={e.id} element={e} theme={theme} viewport={viewport}/>)}</div><div className="music-overlay">{musicCards.map(e=><MusicCard key={e.id} element={e} theme={theme} viewport={viewport}/>)}</div>
     <div className="animated-stickers" aria-hidden="true">{sceneImages.filter(e=>String(e.fileId).endsWith(".gif")||(theme==="dark"&&imageSources[e.fileId])).map(e=>{
       const isGif=String(e.fileId).endsWith(".gif");

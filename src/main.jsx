@@ -258,6 +258,31 @@ function App() {
     locate();
     return()=>observer.disconnect();
   },[authorized]);
+  // Keep media on the canvas visible, but never let it cover an open Excalidraw sidebar.
+  useEffect(()=>{
+    if(!authorized)return;
+    const board=document.querySelector(".board");
+    if(!board)return;
+    const update=()=>{
+      const boardRect=board.getBoundingClientRect();
+      let left=0,right=0;
+      const candidates=board.querySelectorAll('.excalidraw .sidebar, .excalidraw [data-testid="sidebar"], .excalidraw .library-menu, .excalidraw .layer-ui__library');
+      for(const node of candidates){
+        const rect=node.getBoundingClientRect();
+        if(rect.width<140||rect.height<120||rect.bottom<=boardRect.top||rect.top>=boardRect.bottom)continue;
+        if(getComputedStyle(node).visibility==="hidden"||getComputedStyle(node).display==="none")continue;
+        if(rect.right>=boardRect.right-24)right=Math.max(right,boardRect.right-rect.left);
+        if(rect.left<=boardRect.left+24)left=Math.max(left,rect.right-boardRect.left);
+      }
+      board.style.setProperty("--media-clip-right",Math.max(0,right)+"px");
+      board.style.setProperty("--media-clip-left",Math.max(0,left)+"px");
+    };
+    const observer=new MutationObserver(update);
+    observer.observe(board,{childList:true,subtree:true,attributes:true,attributeFilter:["class","style","data-state"]});
+    window.addEventListener("resize",update);
+    update();
+    return()=>{observer.disconnect();window.removeEventListener("resize",update)};
+  },[authorized]);
   async function searchGiphy(event) {
     event.preventDefault();
     if(!searchQuery.trim())return;

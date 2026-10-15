@@ -31,6 +31,11 @@ function App() {
   const draggingSticker=useRef(null);
   const imageLoads=useRef(new Map());
   const [sceneImages,setSceneImages]=useState([]);
+  const [voiceCards,setVoiceCards]=useState([]);
+  const [recording,setRecording]=useState(false);
+  const [voiceBusy,setVoiceBusy]=useState(false);
+  const recorderRef=useRef(null);
+  const voiceStreamRef=useRef(null);
   const [selectedSticker,setSelectedSticker]=useState(null);
   const [pin, setPin] = useState("");
   const [loginError, setLoginError] = useState("");
@@ -319,6 +324,50 @@ function App() {
     setStickerError("");
     return element;
   }
+  function addVoiceCard(audioId){
+    const editor=apiRef.current;
+    if(!editor)throw Error("Board editor is not ready");
+    const state=editor.getAppState(),zoom=state.zoom?.value||1;
+    const width=240,height=76;
+    const x=(window.innerWidth/2)/zoom-(state.scrollX||0)-width/2;
+    const y=(window.innerHeight/2)/zoom-(state.scrollY||0)-height/2;
+    const id=crypto.randomUUID();
+    const element={id,type:"rectangle",x,y,width,height,angle:0,strokeColor:"#8573c8",backgroundColor:"#eee9ff",fillStyle:"solid",strokeWidth:2,strokeStyle:"solid",roughness:0,opacity:100,groupIds:[],frameId:null,roundness:{type:3},seed:Math.floor(Math.random()*2147483647),version:1,versionNonce:Math.floor(Math.random()*2147483647),isDeleted:false,boundElements:null,updated:Date.now(),link:null,locked:false,customData:{voiceNoteId:audioId}};
+    editor.updateScene({elements:[...editor.getSceneElementsIncludingDeleted(),element],appState:{selectedElementIds:{[id]:true}}});
+    pending.current.set(id,element);known.current.set(id,1);
+    setVoiceCards(old=>[...old,element]);
+  }
+  async function startVoice(){
+    if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){setStickerError("Voice recording is not supported in this browser");return}
+    try{
+      setStickerError("");
+      const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+      const type=["audio/webm;codecs=opus","audio/webm","audio/mp4","audio/ogg"].find(t=>MediaRecorder.isTypeSupported(t));
+      if(!type){stream.getTracks().forEach(t=>t.stop());throw Error("No supported recording format")}
+      const recorder=new MediaRecorder(stream,{mimeType:type});
+      const chunks=[];
+      recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
+      recorder.onerror=()=>setStickerError("Microphone recording failed");
+      recorder.onstop=async()=>{
+        stream.getTracks().forEach(t=>t.stop());voiceStreamRef.current=null;
+        setRecording(false);setVoiceBusy(true);
+        try{
+          const blob=new Blob(chunks,{type:type.split(";")[0]});
+          if(!blob.size)throw Error("Recording was empty");
+          const form=new FormData();form.append("audio",blob,"voice."+type.split("/")[1].split(";")[0]);
+          const response=await fetch("/api/voice-notes",{method:"POST",body:form});
+          const data=await readApiJson(response,"/api/voice-notes");
+          addVoiceCard(data.id);
+        }catch(e){setStickerError(e.message)}
+        finally{setVoiceBusy(false)}
+      };
+      recorderRef.current=recorder;voiceStreamRef.current=stream;recorder.start(250);setRecording(true);
+    }catch(e){setStickerError("Microphone: "+e.message)}
+  }
+  function stopVoice(){
+    if(recorderRef.current?.state==="recording")recorderRef.current.stop();
+  }
+  useEffect(()=>()=>{if(recorderRef.current?.state==="recording")recorderRef.current.stop();voiceStreamRef.current?.getTracks().forEach(t=>t.stop())},[]);
   function toggleTheme() {
     setTheme(previous => {
       const next = previous === "dark" ? "light" : "dark";
@@ -337,6 +386,14 @@ function App() {
     const images=elements.filter(e=>e.type==="image"&&!e.isDeleted&&String(e.fileId||"").startsWith("sticker:"));
     const liveZoom=appState?.zoom?.value||1,liveX=appState?.scrollX||0,liveY=appState?.scrollY||0;
     // Update GIF geometry immediately, without waiting for a React render while dragging.
+    for(const element of voices){
+      const card=document.querySelector(`.voice-card[data-voice-element="${element.id}"]`);
+      if(!card)continue;
+      card.style.left=((element.x+liveX)*liveZoom)+"px";card.style.top=((element.y+liveY)*liveZoom)+"px";
+      card.style.width=(element.width*liveZoom)+"px";card.style.height=(element.height*liveZoom)+"px";
+      card.style.transform=`rotate(${element.angle||0}rad)`;
+      card.style.opacity=String((element.opacity??100)/100);
+    }
     for(const element of images){
       const img=document.querySelector(`.animated-stickers img[data-sticker-element="${element.id}"]`);
       if(!img)continue;
@@ -348,6 +405,8 @@ function App() {
       img.style.opacity=String((element.opacity??100)/100);
     }
     setSceneImages(old=>old.length===images.length&&old.every((e,i)=>e===images[i])?old:images);
+    const voices=elements.filter(e=>!e.isDeleted&&e.customData?.voiceNoteId);
+    setVoiceCards(old=>old.length===voices.length&&old.every((e,i)=>e===voices[i])?old:voices);
     if (appState) {
       const next = { zoom: appState.zoom?.value || 1, x: appState.scrollX || 0, y: appState.scrollY || 0 };
       setViewport(old => old.zoom === next.zoom && old.x === next.x && old.y === next.y ? old : next);
@@ -362,7 +421,7 @@ function App() {
   }
 
   if (!authorized) return <form className="login" onSubmit={login}><h1>Our Whiteboard ♡</h1><p>Enter our 6-digit code</p><input aria-label="6-digit code" type="password" inputMode="numeric" autoComplete="off" maxLength={6} pattern="[0-9]{6}" required value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ""))}/><button type="submit">Open board</button><p role="alert">{loginError}</p></form>;
-  return <main className="board"><button type="button" className={`theme-toggle ${theme === "dark" ? "theme-toggle--dark" : "theme-toggle--light"}`} title="Change theme" onClick={toggleTheme} aria-label="Toggle dark mode">{theme === "dark" ? "☀️ Light" : "🌙 Dark"}</button><div className="pattern-controls">
+  return <main className="board"><div className="voice-controls"><button type="button" disabled={voiceBusy} onClick={recording?stopVoice:startVoice}>{voiceBusy?"Saving…":recording?"■ Stop voice":"🎙 Voice note"}</button>{recording&&<span className="voice-live">● Recording</span>}</div><button type="button" className={`theme-toggle ${theme === "dark" ? "theme-toggle--dark" : "theme-toggle--light"}`} title="Change theme" onClick={toggleTheme} aria-label="Toggle dark mode">{theme === "dark" ? "☀️ Light" : "🌙 Dark"}</button><div className="pattern-controls">
       <button type="button" className={`pattern-button ${theme === "dark" ? "pattern-dark" : "pattern-light"}`} onClick={() => setPatternMenu(v => !v)} aria-expanded={patternMenu} aria-label="Board background">▦ Background</button>
       {patternMenu && <div className={`pattern-menu ${theme === "dark" ? "pattern-dark" : "pattern-light"}`}>
         {[["none", "Blank"], ["lines", "Horizontal lines"], ["squares", "Small squares"], ["dots", "Small dots"], ["graph", "Graph paper"]].map(([id, label]) =>
@@ -393,6 +452,7 @@ function App() {
     </section>,libraryHost)}
     {stickerError&&<div className="sticker-global-error" role="alert">{stickerError}<button type="button" onClick={()=>setStickerError("")}>×</button></div>}
     <Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} name="Our Whiteboard" />
+    <div className="voice-overlay">{voiceCards.map(e=><div className="voice-card" key={e.id} data-voice-element={e.id} style={{left:(e.x+viewport.x)*viewport.zoom,top:(e.y+viewport.y)*viewport.zoom,width:e.width*viewport.zoom,height:e.height*viewport.zoom,transform:`rotate(${e.angle||0}rad)`,opacity:(e.opacity??100)/100}}><span>🎙 Voice note</span><audio controls preload="none" src={"/api/voice-notes?id="+encodeURIComponent(e.customData.voiceNoteId)}/></div>)}</div>
     <div className="animated-stickers" aria-hidden="true">{sceneImages.filter(e=>e.fileId.endsWith(".gif")).map(e=>{
       const id=e.fileId.slice(8);
       const scale=e.scale||[1,1];

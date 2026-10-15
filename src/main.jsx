@@ -6,6 +6,10 @@ import "./style.css";
 
 function App() {
   const [authorized, setAuthorized] = useState(false);
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem("whiteboard-theme") === "dark" ? "dark" : "light"; }
+    catch { return "light"; }
+  });
   const [pin, setPin] = useState("");
   const [loginError, setLoginError] = useState("");
   const [api, setApi] = useState(null);
@@ -138,7 +142,11 @@ function App() {
     };
   }, [api, authorized]);
 
-  function onChange(elements) {
+  function onChange(elements, appState) {
+    if (appState?.theme && appState.theme !== theme) {
+      setTheme(appState.theme);
+      try { localStorage.setItem("whiteboard-theme", appState.theme); } catch {}
+    }
     if (!loaded.current || applying.current) return;
     for (const element of elements) {
       if ((element.version ?? 0) > (known.current.get(element.id) ?? -1)) {
@@ -149,6 +157,6 @@ function App() {
   }
 
   if (!authorized) return <form className="login" onSubmit={login}><h1>Our Whiteboard ♡</h1><p>Enter our 6-digit code</p><input aria-label="6-digit code" type="password" inputMode="numeric" autoComplete="off" maxLength={6} pattern="[0-9]{6}" required value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ""))}/><button type="submit">Open board</button><p role="alert">{loginError}</p></form>;
-  return <main className="board"><div className="connection-status" role="status">{status}</div><Excalidraw excalidrawAPI={setApi} onChange={onChange} name="Our Whiteboard" /></main>;
+  return <main className="board"><div className="connection-status" role="status">{status}</div><Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} name="Our Whiteboard" /></main>;
 }
 createRoot(document.getElementById("root")).render(<App />);

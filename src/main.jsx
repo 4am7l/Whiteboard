@@ -370,7 +370,7 @@ function App() {
     if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){setStickerError("Voice recording is not supported in this browser");return}
     try{
       setStickerError("");
-      const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+      const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
       const type=["audio/webm;codecs=opus","audio/webm","audio/mp4","audio/ogg"].find(t=>MediaRecorder.isTypeSupported(t));
       if(!type){stream.getTracks().forEach(t=>t.stop());throw Error("No supported recording format")}
       const recorder=new MediaRecorder(stream,{mimeType:type});

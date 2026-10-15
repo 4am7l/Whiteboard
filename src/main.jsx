@@ -5,6 +5,21 @@ import { Excalidraw } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import "./style.css";
 
+function VoiceNoteCard({element,theme,viewport}){
+  const audioRef=useRef(null);
+  const [playing,setPlaying]=useState(false);
+  const [time,setTime]=useState(0);
+  const [duration,setDuration]=useState(0);
+  const color=element.customData?.voiceColor||"default";
+  const hex=/^#[0-9a-fA-F]{6}$/.test(color)?color:({violet:"#9274db",blue:"#5394e8",rose:"#e078a7",mint:"#3eac98"}[color]||(theme==="dark"?"#a99af6":"#745bd4"));
+  const format=t=>Number.isFinite(t)?Math.floor(t/60)+":"+String(Math.floor(t%60)).padStart(2,"0"):"0:00";
+  return <div className={`voice-card voice-card-${theme}`} data-voice-element={element.id} style={{"--voice-accent":hex,left:(element.x+viewport.x)*viewport.zoom,top:(element.y+viewport.y)*viewport.zoom,width:element.width*viewport.zoom,height:element.height*viewport.zoom,transform:`rotate(${element.angle||0}rad)`,opacity:(element.opacity??100)/100}}>
+    <div className="voice-card-header"><span className="voice-card-icon">♪</span><span className="voice-card-title">Voice note<small>{format(duration||time)}</small></span><span className="voice-card-dot"/></div>
+    <div className="voice-player"><button type="button" className="voice-play" aria-label={playing?"Pause voice note":"Play voice note"} onClick={()=>{const a=audioRef.current;if(!a)return;if(a.paused)a.play().catch(()=>setPlaying(false));else a.pause()}}>{playing?"Ⅱ":"▶"}</button><input aria-label="Voice progress" type="range" min="0" max={duration||1} step=".1" value={Math.min(time,duration||1)} onChange={e=>{if(audioRef.current)audioRef.current.currentTime=Number(e.target.value)}}/><span className="voice-time">{format(time)}</span></div>
+    <audio ref={audioRef} preload="metadata" src={"/api/voice-notes?id="+encodeURIComponent(element.customData.voiceNoteId)} onTimeUpdate={e=>setTime(e.currentTarget.currentTime)} onLoadedMetadata={e=>setDuration(e.currentTarget.duration)} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} onEnded={()=>{setPlaying(false);setTime(0)}}/>
+  </div>;
+}
+
 function App() {
   const [authorized, setAuthorized] = useState(false);
   const [theme, setTheme] = useState(() => {
@@ -34,6 +49,7 @@ function App() {
   const [sceneImages,setSceneImages]=useState([]);
   const [voiceCards,setVoiceCards]=useState([]);
   const [selectedVoiceId,setSelectedVoiceId]=useState(null);
+  const [voiceHex,setVoiceHex]=useState("");
   const [recording,setRecording]=useState(false);
   const [voiceBusy,setVoiceBusy]=useState(false);
   const recorderRef=useRef(null);
@@ -456,9 +472,9 @@ function App() {
       </div>}
     </section>,libraryHost)}
     {stickerError&&<div className="sticker-global-error" role="alert">{stickerError}<button type="button" onClick={()=>setStickerError("")}>×</button></div>}
-    {selectedVoiceId&&<div className={`voice-palette voice-palette-${theme}`} aria-label="Selected voice card colors"><span>🎨 Voice card</span>{[["default","Auto"],["violet","Purple"],["blue","Blue"],["rose","Pink"],["mint","Mint"]].map(([value,label])=><button key={value} type="button" className={"voice-swatch voice-swatch-"+value} title={label} aria-label={label} onClick={()=>setVoiceColor(value)}>{value==="default"?"◐":""}</button>)}</div>}
+    {selectedVoiceId&&<div className={`voice-palette voice-palette-${theme}`} aria-label="Voice note appearance"><span>Voice color</span><div className="voice-palette-swatches">{[["default","Auto"],["violet","Purple"],["blue","Blue"],["rose","Pink"],["mint","Mint"]].map(([value,label])=><button key={value} type="button" className={"voice-swatch voice-swatch-"+value} title={label} aria-label={label} onClick={()=>{setVoiceHex("");setVoiceColor(value)}}>{value==="default"?"◐":""}</button>)}</div><label className="voice-custom-picker" title="Pick a custom color">✎ <input aria-label="Pick any color" type="color" value={/^#[0-9a-fA-F]{6}$/.test(voiceHex)?voiceHex:"#9274db"} onChange={e=>{setVoiceHex(e.target.value);setVoiceColor(e.target.value)}}/></label><form className="voice-hex-form" onSubmit={e=>{e.preventDefault();if(/^#[0-9a-fA-F]{6}$/.test(voiceHex))setVoiceColor(voiceHex)}}><input aria-label="Hex color" placeholder="#9274DB" maxLength={7} value={voiceHex} onChange={e=>setVoiceHex(e.target.value)} /><button type="submit" disabled={!/^#[0-9a-fA-F]{6}$/.test(voiceHex)}>Apply</button></form></div>}
     <Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} name="Our Whiteboard" />
-    <div className="voice-overlay">{voiceCards.map(e=><div className={`voice-card voice-card-${theme} voice-tint-${e.customData?.voiceColor||"default"}`} key={e.id} data-voice-element={e.id} style={{left:(e.x+viewport.x)*viewport.zoom,top:(e.y+viewport.y)*viewport.zoom,width:e.width*viewport.zoom,height:e.height*viewport.zoom,transform:`rotate(${e.angle||0}rad)`,opacity:(e.opacity??100)/100}}><div className="voice-card-header"><span className="voice-card-icon">♫</span><span className="voice-card-title">Voice message<small>Tap play to listen</small></span><span className="voice-card-sparkle">✦</span></div><audio controls preload="none" src={"/api/voice-notes?id="+encodeURIComponent(e.customData.voiceNoteId)}/></div>)}</div>
+    <div className="voice-overlay">{voiceCards.map(e=><VoiceNoteCard key={e.id} element={e} theme={theme} viewport={viewport}/>)}</div>
     <div className="animated-stickers" aria-hidden="true">{sceneImages.filter(e=>e.fileId.endsWith(".gif")).map(e=>{
       const id=e.fileId.slice(8);
       const scale=e.scale||[1,1];

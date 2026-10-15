@@ -1,0 +1,44 @@
+/* Canvas 1–2, media 3, native controls 4, auxiliary panels 8,
+   native context menus 20, dialogs 1000. Keep these layers comparable. */
+.workspace{height:100dvh;width:100%;display:flex;flex-direction:column;overflow:hidden;background:#faf9ff;color:#282536;font:13px system-ui;--panel-bg:#fff;--panel-text:#282536;--line:#dedbe9}
+.workspace-dark{background:#202027;color:#eee;--panel-bg:#292932;--panel-text:#eee;--line:#484650}
+.workspace-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:none;padding:8px max(10px,env(safe-area-inset-right)) 8px max(10px,env(safe-area-inset-left));border-bottom:1px solid var(--line)}
+.workspace-toolbar :is(.music-controls,.voice-controls,.pattern-controls,.theme-toggle,.doodle-panel-trigger,.board-logout-bottom){position:static!important;inset:auto!important;transform:none!important;z-index:auto!important;margin:0;box-shadow:none!important}
+.workspace-toolbar>button,.workspace-toolbar :is(.music-controls,.voice-controls,.pattern-controls)>button{min-height:44px;padding:8px 12px!important;border:1px solid var(--line)!important;border-radius:10px!important;background:var(--panel-bg)!important;color:var(--panel-text)!important;font:600 13px system-ui;cursor:pointer;white-space:nowrap}
+.workspace-toolbar button[aria-expanded=true]{background:#e9e3ff!important;color:#49388d!important;border-color:#a99bff!important}
+.workspace-toolbar .board-logout-bottom{margin-left:auto;font-size:12px!important;opacity:1}
+.workspace-toolbar .voice-live{font-size:11px}
+.workspace-toolbar :is(.music-panel,.doodle-panel,.pattern-menu){position:absolute!important;top:var(--toolbar-bottom,68px)!important;right:12px!important;left:auto!important;bottom:auto!important;z-index:8!important;width:min(360px,calc(100vw - 24px));max-height:calc(100dvh - var(--toolbar-bottom,68px) - 16px)!important;height:auto!important;overflow:auto!important;overscroll-behavior:contain;background:var(--panel-bg)!important;color:var(--panel-text)!important;border:1px solid var(--line)!important;border-radius:14px;padding:44px 12px 12px!important;box-shadow:0 12px 36px #0003}
+.workspace-toolbar .pattern-menu{width:220px;padding:8px!important}
+.workspace-toolbar .pattern-menu button{min-height:44px}
+.panel-close,.workspace-toolbar .doodle-panel-close{position:absolute;top:4px;right:6px;width:40px;height:40px;border:0;border-radius:8px;background:transparent;color:inherit;font-size:24px;cursor:pointer}
+.workspace .board{height:auto;flex:1;min-height:0;width:100%;position:relative;isolation:auto}
+.board>.excalidraw{z-index:auto!important;isolation:auto!important}
+.board :is(.animated-stickers,.voice-overlay,.music-overlay,.placed-stickers){z-index:3;clip-path:none}
+.board .excalidraw .popover{z-index:20}
+.selection-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex:none;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--panel-bg);max-height:30dvh;overflow:auto}
+.selection-toolbar .board-delete-selected{position:static;transform:none;z-index:auto;min-height:44px;box-shadow:none;flex:none;margin:0}
+.selection-toolbar .voice-palette{position:static;inset:auto;transform:none;z-index:auto;flex:1;width:auto;max-width:100%;padding:0;background:transparent;border:0!important;box-shadow:none;backdrop-filter:none;white-space:normal}
+.selection-toolbar .voice-palette :is(button,input){min-height:36px}
+.workspace .sticker-global-error{position:fixed;top:auto;bottom:60px;z-index:30}
+.workspace-toolbar .music-panel form{padding-top:4px}
+.workspace-toolbar .music-panel input{min-width:0;min-height:40px}
+.workspace-toolbar .sticker-grid{max-height:none;overflow:visible}
+.workspace-toolbar .sticker-tabs button{min-height:40px}
+.workspace-toolbar .sticker-upload{padding:12px 6px}
+.workspace button:focus-visible{outline:2px solid #9176f4;outline-offset:2px}
+@media(max-width:650px){
+ .workspace-toolbar{gap:6px;padding:6px 8px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+ .workspace-toolbar>button,.workspace-toolbar :is(.music-controls,.voice-controls,.pattern-controls)>button{width:100%;padding:6px 4px!important;font-size:12px}
+ .workspace-toolbar :is(.music-controls,.voice-controls,.pattern-controls){min-width:0}
+ .workspace-toolbar .voice-controls{flex-direction:column;gap:2px}
+ .workspace-toolbar .board-logout-bottom{margin:0}
+ .workspace-toolbar :is(.music-panel,.doodle-panel,.pattern-menu){right:8px!important;width:calc(100vw - 16px)}
+ .selection-toolbar{gap:6px;padding:6px 8px}
+ .selection-toolbar .voice-palette{gap:6px;min-width:200px}
+}
+@media(prefers-reduced-motion:reduce){.workspace *{scroll-behavior:auto!important}}
+.selection-toolbar .board-delete-selected{display:flex;align-items:center;justify-content:center;padding:8px 14px;border:1px solid #c64a58;border-radius:10px;background:#b93442;color:white;font:600 13px system-ui;cursor:pointer;touch-action:manipulation}
+.selection-toolbar .voice-palette-swatches{flex-wrap:wrap}
+.selection-toolbar .voice-palette .voice-swatch{width:32px;min-width:32px;height:36px;flex-basis:32px}
+.selection-toolbar .voice-palette{box-shadow:none!important;border-radius:0!important}

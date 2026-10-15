@@ -316,40 +316,6 @@ html, body, #root { margin: 0; width: 100%; height: 100%; }
 .music-overlay .music-glass-cover-play:hover{background:#10101be8!important}
 .music-overlay .music-glass-cover img{pointer-events:none}
 
-/* Keep the Excalidraw tool selector above music, voice, stickers and other board overlays. */
-.board > .excalidraw{isolation:auto!important;z-index:auto!important}
-.board .excalidraw .App-menu_top,
-.board .excalidraw .App-toolbar,
-.board .excalidraw .App-toolbar-container,
-.board .excalidraw .default-sidebar-trigger{
-  position:relative;
-  z-index:1000!important;
-}
-.board .excalidraw .App-menu_top{pointer-events:auto}
-
-/* Excalidraw's UI wrapper, not just the toolbar, must outrank sibling overlays.
-   Remove the canvas stacking isolation so the toolbar can escape it. */
-.board .excalidraw{isolation:auto!important;transform:none!important;filter:none!important;contain:none!important}
-.board .excalidraw .layer-ui__wrapper,
-.board .excalidraw .layer-ui__wrapper .App-menu_top,
-.board .excalidraw .layer-ui__wrapper .App-toolbar,
-.board .excalidraw .layer-ui__wrapper .App-toolbar-container{
-  z-index:2147483000!important;
-}
-.board .excalidraw .layer-ui__wrapper{position:absolute!important;inset:0!important;pointer-events:none!important}
-.board .excalidraw .layer-ui__wrapper button,
-.board .excalidraw .layer-ui__wrapper input,
-.board .excalidraw .layer-ui__wrapper [role="toolbar"],
-.board .excalidraw .layer-ui__wrapper .App-menu_top,
-.board .excalidraw .layer-ui__wrapper .App-toolbar,
-.board .excalidraw .layer-ui__wrapper .App-toolbar-container{pointer-events:auto!important}
-
-/* Mask canvas media only where an Excalidraw sidebar is open.
-   Never elevate the entire Excalidraw canvas: that hides drawings. */
-.board :is(.music-overlay,.voice-overlay,.animated-stickers,.placed-stickers){
-  clip-path:inset(0 var(--media-clip-right,0px) 0 var(--media-clip-left,0px));
-}
-
 /* Music/video/voice cards use their own controls. Hide Excalidraw's shape
    properties panel when only these cards are selected; keep other menus. */
 .board.board-media-selected .excalidraw .App-menu_left .Island,
@@ -357,7 +323,6 @@ html, body, #root { margin: 0; width: 100%; height: 100%; }
 .board.board-media-selected .excalidraw .App-menu_left .properties-content{display:none!important}
 
 /* Accessible touch delete action for selected board elements (iPad/phones/desktop). */
-.board-delete-selected{position:absolute;right:16px;bottom:84px;z-index:2147483001;display:flex;align-items:center;justify-content:center;min-height:44px;min-width:92px;padding:10px 15px;border:1px solid #dc5b6480;border-radius:14px;background:#b93442;color:#fff;font:600 14px system-ui;box-shadow:0 5px 18px #0003;cursor:pointer;touch-action:manipulation}
 .board-delete-selected:hover{background:#a82435}
 .board-delete-selected:active{transform:scale(.97)}
 @media(max-width:650px){.board-delete-selected{right:12px;bottom:72px;min-height:44px;padding:9px 13px}}
@@ -411,13 +376,10 @@ html, body, #root { margin: 0; width: 100%; height: 100%; }
 .doodle-panel{top:70px!important}
 @media(max-width:600px){.doodle-panel{top:65px!important}}
 
-/* Excalidraw canvas has z-index:2147483000; sticker controls must sit above it. */
-body > .doodle-panel-trigger{position:fixed!important;z-index:2147483600!important;pointer-events:auto!important;touch-action:manipulation!important;cursor:pointer!important}
-body > .doodle-panel{position:fixed!important;z-index:2147483601!important;pointer-events:auto!important}
-body > .doodle-panel *{pointer-events:auto}
+.workspace-toolbar .doodle-panel *{pointer-events:auto}
 
 /* Doodle browser: fixed-size, non-overlapping sticker tiles. */
-body > .doodle-panel .doodle-grid{
+.workspace-toolbar .doodle-panel .doodle-grid{
   display:grid!important;
   grid-template-columns:repeat(3,minmax(0,1fr))!important;
   grid-auto-rows:98px!important;
@@ -433,7 +395,7 @@ body > .doodle-panel .doodle-grid{
   box-sizing:border-box!important;
   scrollbar-gutter:stable;
 }
-body > .doodle-panel .doodle-grid > button{
+.workspace-toolbar .doodle-panel .doodle-grid > button{
   position:relative!important;
   display:flex!important;
   align-items:center!important;
@@ -453,8 +415,8 @@ body > .doodle-panel .doodle-grid > button{
   background:color-mix(in srgb,currentColor 4%,transparent)!important;
   cursor:pointer!important;
 }
-body > .doodle-panel .doodle-grid > button:hover{border-color:#a99bff!important;background:color-mix(in srgb,#a99bff 13%,transparent)!important}
-body > .doodle-panel .doodle-grid > button > img{
+.workspace-toolbar .doodle-panel .doodle-grid > button:hover{border-color:#a99bff!important;background:color-mix(in srgb,#a99bff 13%,transparent)!important}
+.workspace-toolbar .doodle-panel .doodle-grid > button > img{
   display:block!important;
   width:100%!important;
   height:100%!important;
@@ -467,7 +429,7 @@ body > .doodle-panel .doodle-grid > button > img{
   flex:0 1 auto!important;
   margin:auto!important;
 }
-@media(max-width:420px){body > .doodle-panel .doodle-grid{grid-auto-rows:88px!important;gap:7px!important}body > .doodle-panel .doodle-grid > button{height:88px!important;max-height:88px!important;padding:10px!important}}
+@media(max-width:420px){.workspace-toolbar .doodle-panel .doodle-grid{grid-auto-rows:88px!important;gap:7px!important}.workspace-toolbar .doodle-panel .doodle-grid > button{height:88px!important;max-height:88px!important;padding:10px!important}}
 
 /* Small logout button centered at the bottom of the whiteboard */
 .board-logout-bottom{position:fixed;left:50%;bottom:12px;transform:translateX(-50%);z-index:1000;padding:5px 12px;font-size:11px;line-height:1.4;border-radius:999px;border:1px solid rgba(128,128,128,.3);background:var(--island-bg-color,rgba(255,255,255,.88));color:var(--text-primary-color,#555);opacity:.8;cursor:pointer;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.08)}

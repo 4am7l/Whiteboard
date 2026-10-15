@@ -309,50 +309,128 @@ function App() {
 
   useEffect(()=>{
     if(!api||!authorized)return;
-    const board=document.querySelector(".board");if(!board)return;
+    const board=document.querySelector(".board");
+    if(!board)return;
     let gesture=null;
-    const point=e=>{
-      const state=api.getAppState(),rect=board.getBoundingClientRect(),zoom=state.zoom.value;
-      return {x:(e.clientX-rect.left)/zoom-state.scrollX,y:(e.clientY-rect.top)/zoom-state.scrollY};
+    let selectionOutline=null;
+
+    const point=event=>{
+      const state=api.getAppState();
+      const rect=board.getBoundingClientRect();
+      const zoom=state.zoom?.value||1;
+      return {
+        x:(event.clientX-rect.left)/zoom-state.scrollX,
+        y:(event.clientY-rect.top)/zoom-state.scrollY
+      };
     };
-    const inBounds=(e,p)=>{const [x1,y1,x2,y2]=getCommonBounds([e]);return p.x>=x1&&p.x<=x2&&p.y>=y1&&p.y<=y2};
-    const down=e=>{
-      if(e.button!==0||e.isPrimary===false||api.getAppState().activeTool.type!=="selection"||e.target.closest('.layer-ui__wrapper,.popover,.Modal'))return;
-      const p=point(e),elements=api.getSceneElements();
-      const hit=[...elements].reverse().find(el=>inBounds(el,p));
+    const inBounds=(element,p)=>{
+      const [x1,y1,x2,y2]=getCommonBounds([element]);
+      return p.x>=x1&&p.x<=x2&&p.y>=y1&&p.y<=y2;
+    };
+    const clearOutline=()=>{
+      selectionOutline?.remove();
+      selectionOutline=null;
+    };
+    const drawOutline=(start,end)=>{
+      if(!selectionOutline){
+        selectionOutline=document.createElement("div");
+        selectionOutline.className="board-selection-marquee";
+        selectionOutline.setAttribute("aria-hidden","true");
+        board.appendChild(selectionOutline);
+      }
+      const rect=board.getBoundingClientRect();
+      const zoom=api.getAppState().zoom?.value||1;
+      selectionOutline.style.left=(Math.min(start.x,end.x)+api.getAppState().scrollX)*zoom+"px";
+      selectionOutline.style.top=(Math.min(start.y,end.y)+api.getAppState().scrollY)*zoom+"px";
+      selectionOutline.style.width=Math.abs(end.x-start.x)*zoom+"px";
+      selectionOutline.style.height=Math.abs(end.y-start.y)*zoom+"px";
+    };
+    const down=event=>{
+      const target=event.target;
+      if(event.button!==0||event.isPrimary===false||api.getAppState().activeTool.type!=="selection"||
+        !(target instanceof Element)||!target.closest(".excalidraw__canvas")||
+        target.closest(".layer-ui__wrapper,.popover,.Modal"))return;
+      const start=point(event);
+      const elements=api.getSceneElements();
+      const hit=[...elements].reverse().find(element=>inBounds(element,start));
+      // Normal dragging of unlocked items is left to Excalidraw. A drag from
+      // blank space or a locked item can instead create an inclusive marquee.
+      if(hit&&!hit.locked)return;
+      const state=api.getAppState();
+      gesture={
+        id:event.pointerId,
+        start,
+        startX:event.clientX,
+        startY:event.clientY,
+        base:event.shiftKey?{...state.selectedElementIds}:{},
+        fromLocked:Boolean(hit?.locked)
+      };
       if(hit?.locked){
-        e.preventDefault();e.stopPropagation();
-        const state=api.getAppState();
+        event.preventDefault();
+        event.stopPropagation();
         const ids=expandLockSelection(elements,[hit.id]);
-        const selected=e.shiftKey?{...state.selectedElementIds}:{};
-        for(const id of ids)selected[id]=true;
-        api.updateScene({appState:{selectedElementIds:selected,selectedLinearElement:null,editingTextElement:null}});
-        gesture={blocked:true,id:e.pointerId};
-      }else if(!hit){gesture={start:p,id:e.pointerId,base:e.shiftKey?{...api.getAppState().selectedElementIds}:{}};}
+        api.updateScene({appState:{
+          selectedElementIds:{...gesture.base,...Object.fromEntries([...ids].map(id=>[id,true]))},
+          selectedLinearElement:null,editingTextElement:null
+        }});
+      }
     };
-    const move=e=>{if(gesture?.blocked&&gesture.id===e.pointerId){e.preventDefault();e.stopPropagation()}};
-    const up=e=>{
-      const current=gesture;gesture=null;
-      if(!current||current.id!==e.pointerId)return;
-      if(current.blocked){e.preventDefault();e.stopPropagation();return}
-      const end=point(e),start=current.start;
-      if(Math.hypot(end.x-start.x,end.y-start.y)*api.getAppState().zoom.value<5)return;
-      const ids=api.getSceneElements().filter(el=>{
-        if(!el.locked)return false;
-        const [x1,y1,x2,y2]=getCommonBounds([el]);
-        return x1>=Math.min(start.x,end.x)&&x2<=Math.max(start.x,end.x)&&y1>=Math.min(start.y,end.y)&&y2<=Math.max(start.y,end.y);
-      }).map(el=>el.id);
-      if(ids.length)queueMicrotask(()=>{
-        const all=expandLockSelection(api.getSceneElements(),ids);
-        api.updateScene({appState:{selectedElementIds:{...current.base,...api.getAppState().selectedElementIds,...Object.fromEntries([...all].map(id=>[id,true]))},selectedLinearElement:null}});
+    const move=event=>{
+      const current=gesture;
+      if(!current||current.id!==event.pointerId)return;
+      if(!current.fromLocked)return; // Excalidraw draws the native blank-space marquee.
+      event.preventDefault();
+      event.stopPropagation();
+      if(Math.hypot(event.clientX-current.startX,event.clientY-current.startY)>=5){
+        drawOutline(current.start,point(event));
+      }
+    };
+    const up=event=>{
+      const current=gesture;
+      if(!current||current.id!==event.pointerId)return;
+      gesture=null;
+      clearOutline();
+      if(current.fromLocked){
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      const end=point(event);
+      if(Math.hypot(event.clientX-current.startX,event.clientY-current.startY)<5)return;
+      const left=Math.min(current.start.x,end.x);
+      const right=Math.max(current.start.x,end.x);
+      const top=Math.min(current.start.y,end.y);
+      const bottom=Math.max(current.start.y,end.y);
+      // Select every element whose bounds touch the rectangle, including
+      // partially intersecting unlocked and locked elements.
+      const elements=api.getSceneElements();
+      const touching=elements.filter(element=>{
+        if(element.isDeleted)return false;
+        const [x1,y1,x2,y2]=getCommonBounds([element]);
+        return x1<=right&&x2>=left&&y1<=bottom&&y2>=top;
+      }).map(element=>element.id);
+      const ids=expandLockSelection(elements,touching);
+      // Apply after the native pointer-up handler so its own selection does not
+      // replace the inclusive rectangle result.
+      queueMicrotask(()=>{
+        if(!board.isConnected)return;
+        api.updateScene({appState:{
+          selectedElementIds:{...current.base,...Object.fromEntries([...ids].map(id=>[id,true]))},
+          selectedLinearElement:null,editingTextElement:null
+        }});
       });
     };
-    const cancel=()=>{gesture=null};
+    const cancel=()=>{gesture=null;clearOutline()};
     board.addEventListener("pointerdown",down,true);
     window.addEventListener("pointermove",move,true);
     window.addEventListener("pointerup",up,true);
     window.addEventListener("pointercancel",cancel,true);
-    return()=>{board.removeEventListener("pointerdown",down,true);window.removeEventListener("pointermove",move,true);window.removeEventListener("pointerup",up,true);window.removeEventListener("pointercancel",cancel,true)};
+    return()=>{
+      clearOutline();
+      board.removeEventListener("pointerdown",down,true);
+      window.removeEventListener("pointermove",move,true);
+      window.removeEventListener("pointerup",up,true);
+      window.removeEventListener("pointercancel",cancel,true);
+    };
   },[api,authorized]);
 
   useEffect(()=>{

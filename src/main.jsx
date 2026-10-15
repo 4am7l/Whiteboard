@@ -29,6 +29,7 @@ function App() {
   const [placements,setPlacements]=useState([]);
   const [stickerError,setStickerError]=useState("");
   const draggingSticker=useRef(null);
+  const [selectedSticker,setSelectedSticker]=useState(null);
   const [pin, setPin] = useState("");
   const [loginError, setLoginError] = useState("");
   const [api, setApi] = useState(null);
@@ -246,23 +247,46 @@ function App() {
     setPlacements(old=>old.filter(p=>p.id!==id));
     await fetch("/api/sticker-placements?id="+encodeURIComponent(id),{method:"DELETE"});
   }
+  useEffect(()=>{
+    if(!authorized)return;
+    function key(event){
+      if(!selectedSticker||event.target.closest("input,textarea,[contenteditable=true]"))return;
+      if(event.key==="Delete"||event.key==="Backspace"){event.preventDefault();deletePlacement(selectedSticker);setSelectedSticker(null)}
+      if(event.key==="Escape")setSelectedSticker(null);
+    }
+    window.addEventListener("keydown",key);
+    return()=>window.removeEventListener("keydown",key);
+  },[authorized,selectedSticker]);
+  async function saveStickerPlacement(p){
+    try {const r=await fetch("/api/sticker-placements",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});
+      if(!r.ok)throw Error("Sticker save failed");
+    }catch(e){setStickerError(e.message)}
+  }
+  function startStickerResize(event,p){
+    if(event.button!==0)return;
+    event.preventDefault();event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setSelectedSticker(p.id);
+    draggingSticker.current={id:p.id,mode:"resize",startX:event.clientX,startY:event.clientY,width:p.width};
+  }
   function startStickerDrag(event,p) {
     if(event.button!==0)return;
     event.preventDefault();event.currentTarget.setPointerCapture(event.pointerId);
-    draggingSticker.current={id:p.id,startX:event.clientX,startY:event.clientY,x:p.x,y:p.y};
+    setSelectedSticker(p.id);
+    draggingSticker.current={id:p.id,mode:"move",startX:event.clientX,startY:event.clientY,x:p.x,y:p.y};
   }
   function moveSticker(event) {
     const drag=draggingSticker.current;if(!drag)return;
     const zoom=viewport.zoom||1;
-    setPlacements(old=>old.map(p=>p.id===drag.id?{...p,x:drag.x+(event.clientX-drag.startX)/zoom,y:drag.y+(event.clientY-drag.startY)/zoom}:p));
+    setPlacements(old=>old.map(p=>p.id===drag.id?(drag.mode==="resize"?{...p,width:Math.max(30,Math.min(1000,drag.width+(event.clientX-drag.startX)/zoom))}:{...p,x:drag.x+(event.clientX-drag.startX)/zoom,y:drag.y+(event.clientY-drag.startY)/zoom}):p));
   }
   async function endStickerDrag(event) {
     const drag=draggingSticker.current;if(!drag)return;
     const zoom=viewport.zoom||1;
     const p=placements.find(p=>p.id===drag.id);
-    const next=p?{...p,x:drag.x+(event.clientX-drag.startX)/zoom,y:drag.y+(event.clientY-drag.startY)/zoom}:null;
+    const next=p?(drag.mode==="resize"?{...p,width:Math.max(30,Math.min(1000,drag.width+(event.clientX-drag.startX)/zoom))}:{...p,x:drag.x+(event.clientX-drag.startX)/zoom,y:drag.y+(event.clientY-drag.startY)/zoom}):null;
     draggingSticker.current=null;
-    if(next)await fetch("/api/sticker-placements",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(next)});
+    if(next){setPlacements(old=>old.map(x=>x.id===next.id?next:x));await saveStickerPlacement(next)}
   }
   function toggleTheme() {
     setTheme(previous => {
@@ -325,8 +349,8 @@ function App() {
     <Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} name="Our Whiteboard" />
     <div className="placed-stickers">{placements.map(p=>{
       const sticker=stickers.find(s=>s.id===p.sticker_id);if(!sticker)return null;
-      return <div key={p.id} className="placed-sticker" style={{left:(p.x+viewport.x)*viewport.zoom,top:(p.y+viewport.y)*viewport.zoom,width:p.width*viewport.zoom}} onPointerDown={e=>startStickerDrag(e,p)} onPointerMove={moveSticker} onPointerUp={endStickerDrag} onPointerCancel={endStickerDrag}>
-        <img draggable="false" src={sticker.url} alt={sticker.name}/><button type="button" aria-label="Remove sticker from board" title="Remove sticker" onPointerDown={e=>e.stopPropagation()} onClick={()=>deletePlacement(p.id)}>×</button>
+      return <div key={p.id} className={`placed-sticker ${selectedSticker===p.id?"sticker-selected":""}`} style={{left:(p.x+viewport.x)*viewport.zoom,top:(p.y+viewport.y)*viewport.zoom,width:p.width*viewport.zoom}} onPointerDown={e=>startStickerDrag(e,p)} onPointerMove={moveSticker} onPointerUp={endStickerDrag} onPointerCancel={endStickerDrag}>
+        <img draggable="false" src={sticker.url} alt={sticker.name}/><button type="button" aria-label="Remove sticker from board" title="Remove sticker" onPointerDown={e=>e.stopPropagation()} onClick={()=>{deletePlacement(p.id);setSelectedSticker(null)}}>×</button><span className="sticker-resize-handle" role="button" aria-label="Resize sticker" title="Drag to resize" onPointerDown={e=>startStickerResize(e,p)} onPointerMove={moveSticker} onPointerUp={endStickerDrag} onPointerCancel={endStickerDrag}></span>
       </div>;
     })}</div>
     {pattern !== "none" && <div className={`board-pattern pattern-${pattern} pattern-${theme}`} aria-hidden="true" style={{

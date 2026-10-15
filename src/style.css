@@ -187,3 +187,23 @@ html, body, #root { margin: 0; width: 100%; height: 100%; }
 .sticker-library-open.pattern-dark .sticker-library-content{background:#232329;color:#f3f3f5}
 .sticker-library-open.pattern-light .sticker-library-content{background:#fff;color:#25252b}
 .sticker-library-open .sticker-library-content .sticker-grid{max-height:230px}
+
+/* Voice-note selection uses our own color controls, not Excalidraw's shape properties. */
+.board-voice-selected .App-menu__left .panelColumn,
+.board-voice-selected .App-menu__left .properties-content,
+.board-voice-selected .App-menu__left .Island:not(:has(.sticker-library-inline)),
+.board-voice-selected .App-menu__left .element-properties,
+.board-voice-selected .App-menu__left .App-menu__left__content > .Island{display:none!important}
+/* Plain voice cards, matching the active board theme. */
+.voice-card,.voice-card-light,.voice-card-dark{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:0 2px 8px #0002!important;border:1px solid transparent!important;border-radius:11px!important;gap:3px!important;padding:7px 10px!important}
+.voice-card-light{--voice-base:#fff;background:#fff!important;color:#202127!important;border-color:#d9d9e0!important}
+.voice-card-dark{--voice-base:#25252b;background:#25252b!important;color:#f4f4f6!important;border-color:#42424a!important}
+.voice-card.voice-tint-violet{background:color-mix(in srgb,var(--voice-base) 83%,#9b78e8)!important}
+.voice-card.voice-tint-blue{background:color-mix(in srgb,var(--voice-base) 83%,#4c91dc)!important}
+.voice-card.voice-tint-rose{background:color-mix(in srgb,var(--voice-base) 83%,#d96c9e)!important}
+.voice-card.voice-tint-mint{background:color-mix(in srgb,var(--voice-base) 83%,#37a994)!important}
+.voice-card .voice-card-icon{width:23px;height:23px;border-radius:6px;background:var(--voice-accent)!important;color:#fff!important;box-shadow:none}
+.voice-card .voice-card-sparkle{display:none}
+.voice-card audio{color-scheme:light;filter:none!important;accent-color:var(--voice-accent);background:#f1f1f3;border-radius:20px}
+.voice-card-dark audio{color-scheme:dark;background:#18181c}
+.voice-palette{border:0!important;border-radius:10px!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:0 3px 12px #0002!important}

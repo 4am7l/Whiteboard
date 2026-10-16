@@ -13,6 +13,15 @@
 .board :is(.animated-stickers,.voice-overlay,.music-overlay,.placed-stickers){z-index:3;clip-path:none}
 .board .excalidraw .popover{z-index:20}
 
+/* The pattern belongs behind the transparent drawing canvas, never over images.
+   Keep both canvases above it without lifting the whole UI stacking context. */
+.workspace .board{background:#fff}
+.workspace-dark .board{background:#121212}
+.board>.excalidraw{background:transparent!important}
+.board .board-pattern{z-index:0}
+.board .excalidraw .excalidraw__canvas{z-index:1}
+.board .excalidraw .excalidraw__canvas.interactive{z-index:2}
+
 /* Single floating launcher in the canvas' top-right corner. */
 .workspace-toolbox{
   position:fixed;right:calc(12px + env(safe-area-inset-right));

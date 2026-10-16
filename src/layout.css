@@ -368,3 +368,25 @@
 .image-drawing-control button{width:100%;min-height:36px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel-bg);color:var(--panel-text);font:inherit;cursor:pointer;white-space:normal}
 .image-drawing-control button[aria-pressed="true"]{background:#7560cf;color:#fff;border-color:#7560cf}
 .board .image-ink-overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:4;overflow:hidden}
+
+/* Lock shares the native properties panel when it exists; otherwise it stands alone. */
+.workspace .appearance-lock-bar--embedded{
+  position:static;inset:auto;width:100%;max-width:none;order:-1;
+  padding:0 0 9px;margin:0 0 3px;gap:0;z-index:auto;
+  border:0;border-bottom:1px solid var(--line);border-radius:0;
+  background:transparent;box-shadow:none;backdrop-filter:none;
+  -webkit-backdrop-filter:none;
+}
+.workspace .appearance-lock-bar:not(.appearance-lock-bar--embedded):not(:has(.voice-palette)){
+  width:auto;min-width:110px;
+}
+.workspace .board.board-single-selected:not(.board-locked-selected):not(.board-media-selected) .excalidraw .App-menu__left{
+  top:calc(72px + env(safe-area-inset-top))!important;
+  max-height:calc(100dvh - 96px - env(safe-area-inset-top) - env(safe-area-inset-bottom))!important;
+}
+@media(max-width:650px){
+  .workspace .board.board-single-selected:not(.board-locked-selected):not(.board-media-selected) .excalidraw .App-menu__left{
+    top:calc(67px + env(safe-area-inset-top))!important;
+    max-height:calc(100dvh - 89px - env(safe-area-inset-top) - env(safe-area-inset-bottom))!important;
+  }
+}

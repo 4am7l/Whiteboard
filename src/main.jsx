@@ -9,6 +9,27 @@ import { STICKER_PACKS, getStickerPackItems } from "./stickerPacks";
 import { mediaCardStyle } from "./mediaGeometry";
 import { segmentHitsImage } from "./imageDrawing";
 
+function SelectionControls({count,locked,customPalette,children}){
+  const [host,setHost]=useState(null);
+  const native=count===1&&!locked&&!customPalette;
+  useEffect(()=>{
+    if(!native){setHost(null);return}
+    const root=document.querySelector(".board .excalidraw");
+    if(!root)return;
+    const locate=()=>{
+      const panel=root.querySelector(".App-menu__left .panelColumn");
+      setHost(panel?.getClientRects().length?panel:null);
+    };
+    locate();
+    const observer=new MutationObserver(locate);
+    observer.observe(root,{childList:true,subtree:true});
+    return()=>observer.disconnect();
+  },[native]);
+  const embedded=native&&host?.isConnected;
+  const controls=<div className={`appearance-lock-bar ${count>1?"appearance-lock-bar--multiple":""} ${embedded?"appearance-lock-bar--embedded":""}`} aria-label="Selected element controls">{children}</div>;
+  return embedded?createPortal(controls,host):controls;
+}
+
 function ImageDrawingControl({image,onToggle}){
   const [host,setHost]=useState(null);
   useEffect(()=>{
@@ -1118,7 +1139,7 @@ function App() {
     </div>
     <button type="button" className="board-logout-bottom" onClick={logout} title="Return to password screen" aria-label="Log out">Log out</button>
     {stickerError&&<div className="sticker-global-error" role="alert">{stickerError}<button type="button" onClick={()=>setStickerError("")}>×</button></div>}
-    {selectedBoardIds.length>0&&<div className={`appearance-lock-bar ${selectedBoardIds.length>1?"appearance-lock-bar--multiple":""}`} aria-label="Selected element controls"><button type="button" className="selection-lock" onClick={toggleSelectedLock} aria-label={selectionLocked?"Unlock selected items":"Lock selected items"}><span aria-hidden="true">{selectionLocked?"🔓":"🔒"}</span> {selectionLocked?"Unlock":"Lock"}{selectedBoardIds.length>1?` (${selectedBoardIds.length})`:""}</button>{selectionLocked&&selectedBoardIds.length===1&&<span className="locked-selection-hint">Locked · selection only</span>}{selectedBoardIds.length===1&&selectedVoiceId&&!selectionLocked&&<div className={`voice-palette voice-palette-${theme}`} aria-label="Voice note appearance"><span>Voice color</span><div className="voice-palette-swatches">{[["default","Auto"],["violet","Purple"],["blue","Blue"],["rose","Pink"],["mint","Mint"]].map(([value,label])=><button key={value} type="button" className={"voice-swatch voice-swatch-"+value} title={label} aria-label={label} onClick={()=>{setVoiceHex("");setVoiceColor(value)}}>{value==="default"?"◐":""}</button>)}</div><label className="voice-custom-picker" title="Pick a custom color">✎ <input aria-label="Pick any color" type="color" value={/^#[0-9a-fA-F]{6}$/.test(voiceHex)?voiceHex:"#9274db"} onChange={e=>{setVoiceHex(e.target.value);setVoiceColor(e.target.value)}}/></label><form className="voice-hex-form" onSubmit={e=>{e.preventDefault();if(/^#[0-9a-fA-F]{6}$/.test(voiceHex))setVoiceColor(voiceHex)}}><input aria-label="Hex color" placeholder="#9274DB" maxLength={7} value={voiceHex} onChange={e=>setVoiceHex(e.target.value)} /><button type="submit" disabled={!/^#[0-9a-fA-F]{6}$/.test(voiceHex)}>Apply</button></form></div>}
+    {selectedBoardIds.length>0&&<SelectionControls count={selectedBoardIds.length} locked={selectionLocked} customPalette={Boolean(selectedVoiceId||selectedMusicId)}><button type="button" className="selection-lock" onClick={toggleSelectedLock} aria-label={selectionLocked?"Unlock selected items":"Lock selected items"}>{selectionLocked?"Unlock":"Lock"}{selectedBoardIds.length>1?` (${selectedBoardIds.length})`:""}</button>{selectionLocked&&selectedBoardIds.length===1&&<span className="locked-selection-hint">Locked · selection only</span>}{selectedBoardIds.length===1&&selectedVoiceId&&!selectionLocked&&<div className={`voice-palette voice-palette-${theme}`} aria-label="Voice note appearance"><span>Voice color</span><div className="voice-palette-swatches">{[["default","Auto"],["violet","Purple"],["blue","Blue"],["rose","Pink"],["mint","Mint"]].map(([value,label])=><button key={value} type="button" className={"voice-swatch voice-swatch-"+value} title={label} aria-label={label} onClick={()=>{setVoiceHex("");setVoiceColor(value)}}>{value==="default"?"◐":""}</button>)}</div><label className="voice-custom-picker" title="Pick a custom color">✎ <input aria-label="Pick any color" type="color" value={/^#[0-9a-fA-F]{6}$/.test(voiceHex)?voiceHex:"#9274db"} onChange={e=>{setVoiceHex(e.target.value);setVoiceColor(e.target.value)}}/></label><form className="voice-hex-form" onSubmit={e=>{e.preventDefault();if(/^#[0-9a-fA-F]{6}$/.test(voiceHex))setVoiceColor(voiceHex)}}><input aria-label="Hex color" placeholder="#9274DB" maxLength={7} value={voiceHex} onChange={e=>setVoiceHex(e.target.value)} /><button type="submit" disabled={!/^#[0-9a-fA-F]{6}$/.test(voiceHex)}>Apply</button></form></div>}
     {selectedBoardIds.length===1&&selectedMusicId&&!selectionLocked&&<div className={`voice-palette music-palette voice-palette-${theme}`} aria-label="Music and video appearance">
       <span>Music / video color</span>
       <div className="voice-palette-swatches">
@@ -1130,7 +1151,7 @@ function App() {
         <button type="submit" disabled={!/^#[0-9a-fA-F]{6}$/.test(musicHex)}>Apply</button>
       </form>
     </div>}
-</div>}
+</SelectionControls>}
     <div className={`board ${selectedVoiceId?"board-voice-selected":""} ${selectionLocked?"board-locked-selected":""} ${selectedBoardIds.length===1?"board-single-selected":""} ${selectedBoardIds.length>1?"board-multi-selected":""} ${penActive?"board-pen-active":""}`}>
     <ImageDrawingControl image={selectedBoardIds.length===1?sceneImages.find(e=>e.id===selectedBoardIds[0]):null} onToggle={toggleImageDrawing}/>
     <Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} initialData={{appState:{viewBackgroundColor:"transparent"}}} name="Our Whiteboard" />

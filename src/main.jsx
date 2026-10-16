@@ -271,6 +271,59 @@ function App() {
 
   useEffect(() => {
     if (!authorized || !api) return;
+    const board = document.querySelector(".board");
+    if (!board) return;
+    const wheel = event => {
+      const media = event.target instanceof Element && event.target.closest(".voice-overlay,.music-overlay");
+      if (!(event.ctrlKey || event.metaKey)) {
+        // Media controls sit outside Excalidraw, so forward normal board panning.
+        if (!media) return;
+        const canvas = board.querySelector("canvas.interactive");
+        if (!canvas) return;
+        event.preventDefault();
+        event.stopPropagation();
+        canvas.dispatchEvent(new WheelEvent("wheel", {
+          bubbles:true, cancelable:true, deltaX:event.deltaX, deltaY:event.deltaY,
+          deltaMode:event.deltaMode, clientX:event.clientX, clientY:event.clientY,
+          shiftKey:event.shiftKey,
+        }));
+        return;
+      }
+      // Capture with passive:false before the browser handles Ctrl+wheel/pinch.
+      event.preventDefault();
+      event.stopPropagation();
+      const state = api.getAppState();
+      const rect = board.getBoundingClientRect();
+      const zoom = state.zoom.value;
+      const units = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rect.height : 1;
+      const delta = Math.max(-100, Math.min(100, event.deltaY * units));
+      const nextZoom = Math.max(.1, Math.min(30, zoom * Math.exp(-delta * .002)));
+      const x = event.clientX - rect.left, y = event.clientY - rect.top;
+      api.updateScene({appState:{
+        zoom:{value:nextZoom},
+        scrollX:state.scrollX + x / nextZoom - x / zoom,
+        scrollY:state.scrollY + y / nextZoom - y / zoom,
+      }});
+    };
+    // Cross-origin players cannot bubble wheel events. While Ctrl/Cmd is held,
+    // let the board receive the pointer instead; playback itself is unchanged.
+    const modifier = event => board.classList.toggle("board-zoom-modifier", event.ctrlKey || event.metaKey);
+    const clear = () => board.classList.remove("board-zoom-modifier");
+    board.addEventListener("wheel", wheel, {capture:true, passive:false});
+    window.addEventListener("keydown", modifier, true);
+    window.addEventListener("keyup", modifier, true);
+    window.addEventListener("blur", clear);
+    return () => {
+      board.removeEventListener("wheel", wheel, true);
+      window.removeEventListener("keydown", modifier, true);
+      window.removeEventListener("keyup", modifier, true);
+      window.removeEventListener("blur", clear);
+      clear();
+    };
+  }, [api, authorized]);
+
+  useEffect(() => {
+    if (!authorized || !api) return;
     const root = document.querySelector(".board .excalidraw");
     if (!root) return;
     let drag = null;

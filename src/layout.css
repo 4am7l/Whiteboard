@@ -359,3 +359,6 @@
 .appearance-lock-bar .music-palette .voice-hex-form button{
   flex:0 0 auto;
 }
+
+/* Route Ctrl/Cmd + wheel to the board rather than embedded players. */
+.board.board-zoom-modifier .music-overlay .music-glass-card iframe{pointer-events:none!important}

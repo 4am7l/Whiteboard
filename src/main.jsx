@@ -273,6 +273,26 @@ function App() {
     if (!authorized || !api) return;
     const board = document.querySelector(".board");
     if (!board) return;
+    let zoomFrame = 0, targetZoom = null, anchor = null, lastFrame = 0;
+    const animateZoom = now => {
+      zoomFrame = 0;
+      const state = api.getAppState(), current = state.zoom.value;
+      const elapsed = lastFrame ? Math.min(50, now - lastFrame) : 16;
+      lastFrame = now;
+      const remaining = Math.log(targetZoom / current);
+      const done = Math.abs(remaining) < .0005;
+      const next = done ? targetZoom : current * Math.exp(remaining * (1 - Math.exp(-elapsed / 45)));
+      api.updateScene({appState:{
+        zoom:{value:next},
+        scrollX:state.scrollX + anchor.x / next - anchor.x / current,
+        scrollY:state.scrollY + anchor.y / next - anchor.y / current,
+        // Reuse Excalidraw's element raster caches while zooming, as its native
+        // wheel handler does, then render the final resolution once settled.
+        shouldCacheIgnoreZoom:!done,
+      }});
+      if(done){targetZoom=null;lastFrame=0}
+      else zoomFrame=requestAnimationFrame(animateZoom);
+    };
     const wheel = event => {
       const media = event.target instanceof Element && event.target.closest(".voice-overlay,.music-overlay");
       if (!(event.ctrlKey || event.metaKey)) {
@@ -297,13 +317,9 @@ function App() {
       const zoom = state.zoom.value;
       const units = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rect.height : 1;
       const delta = Math.max(-100, Math.min(100, event.deltaY * units));
-      const nextZoom = Math.max(.1, Math.min(30, zoom * Math.exp(-delta * .002)));
-      const x = event.clientX - rect.left, y = event.clientY - rect.top;
-      api.updateScene({appState:{
-        zoom:{value:nextZoom},
-        scrollX:state.scrollX + x / nextZoom - x / zoom,
-        scrollY:state.scrollY + y / nextZoom - y / zoom,
-      }});
+      targetZoom = Math.max(.1, Math.min(30, (targetZoom ?? zoom) * Math.exp(-delta * .002)));
+      anchor = {x:event.clientX - rect.left,y:event.clientY - rect.top};
+      if(!zoomFrame)zoomFrame=requestAnimationFrame(animateZoom);
     };
     // Cross-origin players cannot bubble wheel events. While Ctrl/Cmd is held,
     // let the board receive the pointer instead; playback itself is unchanged.
@@ -314,6 +330,8 @@ function App() {
     window.addEventListener("keyup", modifier, true);
     window.addEventListener("blur", clear);
     return () => {
+      cancelAnimationFrame(zoomFrame);
+      api.updateScene({appState:{shouldCacheIgnoreZoom:false}});
       board.removeEventListener("wheel", wheel, true);
       window.removeEventListener("keydown", modifier, true);
       window.removeEventListener("keyup", modifier, true);
@@ -893,7 +911,7 @@ function App() {
       const comparable=e=>JSON.stringify(Object.fromEntries(Object.entries(e).filter(([key])=>!["version","versionNonce","updated","locked"].includes(key))));
       const safe=elements.map(e=>{
         const previous=lockedSnapshot.current.get(e.id);
-        if(!previous?.locked||comparable(previous)===comparable(e))return e;
+        if(!previous?.locked||(previous.version===e.version&&previous.versionNonce===e.versionNonce)||comparable(previous)===comparable(e))return e;
         repaired=true;
         return {...previous,locked:e.locked,version:Math.max(previous.version,e.version)+1,versionNonce:Math.floor(Math.random()*2147483647),updated:Date.now()};
       });
@@ -906,7 +924,10 @@ function App() {
         return;
       }
     }
-    lockedSnapshot.current=new Map(elements.filter(e=>e.locked&&!e.isDeleted).map(e=>[e.id,structuredClone(e)]));
+    lockedSnapshot.current=new Map(elements.filter(e=>e.locked&&!e.isDeleted).map(e=>{
+      const previous=lockedSnapshot.current.get(e.id);
+      return [e.id,previous&&previous.version===e.version&&previous.versionNonce===e.versionNonce?previous:structuredClone(e)];
+    }));
     lastSelection.current={...appState?.selectedElementIds};
     persistBoardImages(elements,files);
     const images=elements.filter(e=>e.type==="image"&&!e.isDeleted&&e.fileId);

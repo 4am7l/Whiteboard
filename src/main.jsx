@@ -1,11 +1,40 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { Excalidraw, getCommonBounds, CaptureUpdateAction } from "@excalidraw/excalidraw";
+import { Excalidraw, getCommonBounds, getFreeDrawSvgPath, CaptureUpdateAction } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import "./style.css";
 import "./layout.css";
 import { STICKER_PACKS, getStickerPackItems } from "./stickerPacks";
 import { mediaCardStyle } from "./mediaGeometry";
+import { segmentHitsImage } from "./imageDrawing";
+
+function ImageDrawingControl({image,onToggle}){
+  const [host,setHost]=useState(null);
+  useEffect(()=>{
+    if(!image||image.locked)return;
+    const root=document.querySelector(".board .excalidraw");
+    if(!root)return;
+    const locate=()=>setHost(root.querySelector(".App-menu__left .panelColumn"));
+    locate();
+    const observer=new MutationObserver(locate);
+    observer.observe(root,{childList:true,subtree:true});
+    return()=>observer.disconnect();
+  },[image?.id,image?.locked]);
+  if(!image||image.locked||!host?.isConnected)return null;
+  return createPortal(<fieldset className="image-drawing-control"><legend>الرسم فوق الصورة</legend><button type="button" aria-pressed={Boolean(image.customData?.allowDrawing)} onClick={onToggle}>{image.customData?.allowDrawing?"✓ مسموح — إيقاف الرسم":"✎ السماح بالرسم"}</button></fieldset>,host);
+}
+
+function ImageInkOverlay({images,strokes,viewport}){
+  // HTML images (dark-mode originals and GIFs) sit above the canvas. Repeat
+  // native freehand paths only in their enabled image regions.
+  const paths=useMemo(()=>strokes.map(e=>{
+    const [x1,y1,x2,y2]=getCommonBounds([e]);
+    return <path key={e.id} d={getFreeDrawSvgPath(e)} fill={e.strokeColor} opacity={(e.opacity??100)/100} transform={`translate(${e.x} ${e.y}) rotate(${(e.angle||0)*180/Math.PI} ${(x1+x2)/2-e.x} ${(y1+y2)/2-e.y})`}/>;
+  }),[strokes]);
+  if(!images.length||!strokes.length)return null;
+  return <svg className="image-ink-overlay" aria-hidden="true"><defs><clipPath id="image-ink-regions" clipPathUnits="userSpaceOnUse">{images.map(e=><rect key={e.id} x={e.x} y={e.y} width={e.width} height={e.height} rx={e.roundness?.type?Math.min(32,e.width/4,e.height/4):0} transform={`rotate(${(e.angle||0)*180/Math.PI} ${e.x+e.width/2} ${e.y+e.height/2})`}/>)}</clipPath></defs><g transform={`translate(${viewport.x*viewport.zoom} ${viewport.y*viewport.zoom}) scale(${viewport.zoom})`}><g clipPath="url(#image-ink-regions)">{paths}</g></g></svg>;
+}
 
 function VoiceNoteCard({element,theme,viewport}){
   const audioRef=useRef(null);
@@ -136,6 +165,7 @@ function App() {
   const [selectedMusicId,setSelectedMusicId]=useState(null);
   const [musicHex,setMusicHex]=useState("");
   const [selectedBoardIds,setSelectedBoardIds]=useState([]);
+  const [inkStrokes,setInkStrokes]=useState([]);
   const [penActive,setPenActive]=useState(false);
   const [selectionLocked,setSelectionLocked]=useState(false);
   const lockedSnapshot=useRef(new Map());
@@ -767,6 +797,49 @@ function App() {
     setStickerError("");
     return element;
   }
+  function toggleImageDrawing(){
+    const editor=apiRef.current;if(!editor)return;
+    const selected=editor.getAppState().selectedElementIds||{};
+    const ids=Object.keys(selected).filter(id=>selected[id]);
+    if(ids.length!==1)return;
+    const elements=editor.getSceneElementsIncludingDeleted();
+    const image=elements.find(e=>e.id===ids[0]&&e.type==="image"&&!e.isDeleted&&!e.locked);
+    if(!image)return;
+    const changed={...image,customData:{...image.customData,allowDrawing:!image.customData?.allowDrawing,drawingLayer:true},version:image.version+1,versionNonce:Math.floor(Math.random()*2147483647),updated:Date.now()};
+    editor.updateScene({elements:elements.map(e=>e.id===image.id?changed:e),captureUpdate:CaptureUpdateAction.IMMEDIATELY});
+  }
+
+  useEffect(()=>{
+    if(!api||!authorized)return;
+    const board=document.querySelector(".board");if(!board)return;
+    let gesture=null,forwarding=false;
+    const point=e=>{const state=api.getAppState(),r=board.getBoundingClientRect();return {x:(e.clientX-r.left)/state.zoom.value-state.scrollX,y:(e.clientY-r.top)/state.zoom.value-state.scrollY}};
+    const blocked=(a,b)=>api.getSceneElements().some(e=>e.type==="image"&&!e.isDeleted&&!e.customData?.allowDrawing&&segmentHitsImage(a,b,e));
+    const stop=e=>{e.preventDefault();e.stopImmediatePropagation()};
+    const down=e=>{
+      if(e.button!==0||api.getAppState().activeTool.type!=="freedraw"||!e.target.closest?.("canvas"))return;
+      const p=point(e);gesture={id:e.pointerId,last:p,event:e,blocked:blocked(p,p),canvas:e.target};
+      if(gesture.blocked)stop(e);
+    };
+    const move=e=>{
+      if(forwarding||!gesture||e.pointerId!==gesture.id)return;
+      if(gesture.blocked){stop(e);return}
+      const p=point(e);
+      if(blocked(gesture.last,p)){
+        stop(e);gesture.blocked=true;
+        const last=gesture.event;
+        forwarding=true;
+        try{gesture.canvas.dispatchEvent(new PointerEvent("pointerup",{bubbles:true,pointerId:e.pointerId,pointerType:e.pointerType,clientX:last.clientX,clientY:last.clientY,button:0,buttons:0,isPrimary:e.isPrimary}))}finally{forwarding=false}
+      }else{gesture.last=p;gesture.event=e}
+    };
+    const up=e=>{if(!forwarding&&gesture?.id===e.pointerId){if(gesture.blocked)stop(e);gesture=null}};
+    board.addEventListener("pointerdown",down,true);
+    window.addEventListener("pointermove",move,{capture:true,passive:false});
+    window.addEventListener("pointerup",up,true);
+    window.addEventListener("pointercancel",up,true);
+    return()=>{board.removeEventListener("pointerdown",down,true);window.removeEventListener("pointermove",move,true);window.removeEventListener("pointerup",up,true);window.removeEventListener("pointercancel",up,true)};
+  },[api,authorized]);
+
   function toggleSelectedLock(){
     const editor=apiRef.current;if(!editor)return;
     const selected=editor.getAppState().selectedElementIds||{};
@@ -955,6 +1028,8 @@ function App() {
       img.style.opacity=String((element.opacity??100)/100);
       img.style.borderRadius=element.roundness?.type?Math.min(32,element.width/4,element.height/4)*liveZoom+"px":"0px";
     }
+    const strokes=elements.filter(e=>e.type==="freedraw"&&!e.isDeleted);
+    setInkStrokes(old=>old.length===strokes.length&&old.every((e,i)=>e.id===strokes[i].id&&e.version===strokes[i].version&&e.versionNonce===strokes[i].versionNonce)?old:strokes.map(e=>({...e})));
     setSceneImages(old=>old.length===images.length&&old.every((e,i)=>e===images[i])?old:images);
     if(theme==="dark"){
       const available=apiRef.current?.getFiles?.()||files||{};
@@ -1057,6 +1132,7 @@ function App() {
     </div>}
 </div>}
     <div className={`board ${selectedVoiceId?"board-voice-selected":""} ${selectionLocked?"board-locked-selected":""} ${selectedBoardIds.length===1?"board-single-selected":""} ${selectedBoardIds.length>1?"board-multi-selected":""} ${penActive?"board-pen-active":""}`}>
+    <ImageDrawingControl image={selectedBoardIds.length===1?sceneImages.find(e=>e.id===selectedBoardIds[0]):null} onToggle={toggleImageDrawing}/>
     <Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} initialData={{appState:{viewBackgroundColor:"transparent"}}} name="Our Whiteboard" />
     <div className="voice-overlay">{voiceCards.map(e=><VoiceNoteCard key={e.id} element={e} theme={theme} viewport={viewport}/>)}</div><div className="music-overlay">{musicCards.map(e=><MusicCard key={e.id} element={e} theme={theme} viewport={viewport}/>)}</div>
     <div className="animated-stickers" aria-hidden="true">{sceneImages.filter(e=>String(e.fileId).endsWith(".gif")||(theme==="dark"&&imageSources[e.fileId])).map(e=>{
@@ -1071,6 +1147,7 @@ function App() {
       }}/>;
     })}</div>
 
+    <ImageInkOverlay images={sceneImages.filter(e=>e.customData?.drawingLayer&&(String(e.fileId).endsWith(".gif")||(theme==="dark"&&imageSources[e.fileId])))} strokes={inkStrokes} viewport={viewport}/>
     {pattern !== "none" && <div className={`board-pattern pattern-${pattern} pattern-${theme}`} aria-hidden="true" style={{
       "--pattern-size": `${(pattern === "graph" ? 10 : 20) * viewport.zoom}px`,
       "--pattern-x": `${viewport.x * viewport.zoom}px`,

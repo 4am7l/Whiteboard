@@ -362,3 +362,9 @@
 
 /* Route Ctrl/Cmd + wheel to the board rather than embedded players. */
 .board.board-zoom-modifier .music-overlay .music-glass-card iframe{pointer-events:none!important}
+
+/* Image permission lives in the native properties flow, below the curve controls. */
+.image-drawing-control{margin:6px 0 0;padding:0;border:0;min-width:0}
+.image-drawing-control button{width:100%;min-height:36px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel-bg);color:var(--panel-text);font:inherit;cursor:pointer;white-space:normal}
+.image-drawing-control button[aria-pressed="true"]{background:#7560cf;color:#fff;border-color:#7560cf}
+.board .image-ink-overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:4;overflow:hidden}

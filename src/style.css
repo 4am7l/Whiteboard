@@ -431,3 +431,26 @@ html, body, #root { margin: 0; width: 100%; height: 100%; }
 /* Small logout button centered at the bottom of the whiteboard */
 .board-logout-bottom{position:fixed;left:50%;bottom:12px;transform:translateX(-50%);z-index:1000;padding:5px 12px;font-size:11px;line-height:1.4;border-radius:999px;border:1px solid rgba(128,128,128,.3);background:var(--island-bg-color,rgba(255,255,255,.88));color:var(--text-primary-color,#555);opacity:.8;cursor:pointer;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.08)}
 .board-logout-bottom:hover{opacity:1}
+
+/* Opt-in responsive media layout: the outer frame follows native Excalidraw resizing.
+   Reflow the CSS contents rather than stretching images, video or controls. */
+.media-responsive-toggle{border:1px solid currentColor;border-radius:8px;padding:5px 9px;background:transparent;color:inherit;font:inherit;cursor:pointer;white-space:nowrap}
+.media-responsive-toggle[aria-pressed="true"]{background:color-mix(in srgb,currentColor 14%,transparent)}
+.voice-card[style*="container-type"],.music-card[style*="container-type"]{box-sizing:border-box;min-width:0;min-height:0;padding:clamp(4px,3cqw,14px);gap:clamp(3px,2cqw,11px)}
+.voice-card[style*="container-type"] .voice-chat-player{width:100%;min-width:0;gap:clamp(3px,2cqw,11px)}
+.voice-card[style*="container-type"] .voice-chat-play{flex:0 0 clamp(20px,15cqw,37px);width:clamp(20px,15cqw,37px);height:clamp(20px,15cqw,37px)}
+.music-card[style*="container-type"] .music-glass-cover{width:clamp(28px,25cqw,72px);height:clamp(28px,25cqw,72px);aspect-ratio:1;flex-shrink:0}
+.music-card[style*="container-type"] img{object-fit:cover;max-width:100%;max-height:100%}
+.music-card[style*="container-type"] iframe{max-width:100%;min-height:0}
+@container (max-width:220px){
+ .music-glass-audio{gap:4px!important}
+ .music-glass-audio .music-glass-cover{width:35px;height:35px}
+ .music-glass-title,.music-glass-artist{font-size:10px}
+ .voice-chat-body{gap:2px}
+ .voice-waveform{height:18px}
+}
+@container (max-height:95px){
+ .music-glass-video-top{font-size:10px;gap:3px}
+ .music-glass-video{gap:3px!important}
+ .music-glass-video-play{width:28px;height:28px}
+}

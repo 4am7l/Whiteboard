@@ -184,6 +184,7 @@ function App() {
   const [musicError,setMusicError]=useState("");
   const [selectedVoiceId,setSelectedVoiceId]=useState(null);
   const [selectedMusicId,setSelectedMusicId]=useState(null);
+  const [mediaResponsive,setMediaResponsive]=useState(false);
   const [musicHex,setMusicHex]=useState("");
   const [selectedBoardIds,setSelectedBoardIds]=useState([]);
   const [inkStrokes,setInkStrokes]=useState([]);
@@ -871,6 +872,20 @@ function App() {
     editor.updateScene({elements:next,appState:{selectedElementIds:Object.fromEntries([...ids].map(id=>[id,true])),selectedLinearElement:null},captureUpdate:CaptureUpdateAction.IMMEDIATELY});
   }
 
+  function toggleMediaResponsive(){
+    const editor=apiRef.current;
+    const id=selectedVoiceId||selectedMusicId;
+    if(!editor||!id||selectionLocked)return;
+    const elements=editor.getSceneElementsIncludingDeleted();
+    const item=elements.find(e=>e.id===id&&!e.isDeleted);
+    if(!item)return;
+    const enabled=!Boolean(item.customData?.mediaResponsiveLayout);
+    const next=elements.map(e=>e.id!==id?e:{...e,customData:{...e.customData,mediaResponsiveLayout:enabled},version:(e.version||0)+1,versionNonce:Math.floor(Math.random()*2147483647),updated:Date.now()});
+    editor.updateScene({elements:next,captureUpdate:CaptureUpdateAction.IMMEDIATELY});
+    setMediaResponsive(enabled);
+    const changed=next.find(e=>e.id===id);pending.current.set(id,changed);known.current.set(id,changed.version);
+  }
+
   function setVoiceColor(color){
     const editor=apiRef.current;if(!editor||!selectedVoiceId||selectionLocked)return;
     const elements=editor.getSceneElementsIncludingDeleted();
@@ -1037,6 +1052,8 @@ function App() {
       card.style.transform=style.transform;
       card.style.transformOrigin=style.transformOrigin;
       card.style.opacity=String(style.opacity);
+      card.style.containerType=style.containerType||"";
+      card.style.overflow=style.overflow||"";
     }
     for(const element of images){
       const img=document.querySelector(`.animated-stickers img[data-sticker-element="${element.id}"]`);
@@ -1081,6 +1098,7 @@ function App() {
       setSelectedVoiceId(old=>old===(selected?.id||null)?old:(selected?.id||null));
       const selectedMusic=selectedIds.length===1?elements.find(e=>!e.isDeleted&&e.customData?.music&&appState.selectedElementIds?.[e.id]):null;
       setSelectedMusicId(old=>old===(selectedMusic?.id||null)?old:(selectedMusic?.id||null));
+      setMediaResponsive(Boolean((selectedMusic||selected)?.customData?.mediaResponsiveLayout));
       const next = { zoom: appState.zoom?.value || 1, x: appState.scrollX || 0, y: appState.scrollY || 0 };
       setViewport(old => old.zoom === next.zoom && old.x === next.x && old.y === next.y ? old : next);
     }
@@ -1139,9 +1157,9 @@ function App() {
     </div>
     <button type="button" className="board-logout-bottom" onClick={logout} title="Return to password screen" aria-label="Log out">Log out</button>
     {stickerError&&<div className="sticker-global-error" role="alert">{stickerError}<button type="button" onClick={()=>setStickerError("")}>×</button></div>}
-    {selectedBoardIds.length>0&&<SelectionControls count={selectedBoardIds.length} locked={selectionLocked} customPalette={Boolean(selectedVoiceId||selectedMusicId)}><button type="button" className="selection-lock" onClick={toggleSelectedLock} aria-label={selectionLocked?"Unlock selected items":"Lock selected items"}>{selectionLocked?"Unlock":"Lock"}{selectedBoardIds.length>1?` (${selectedBoardIds.length})`:""}</button>{selectionLocked&&selectedBoardIds.length===1&&<span className="locked-selection-hint">Locked · selection only</span>}{selectedBoardIds.length===1&&selectedVoiceId&&!selectionLocked&&<div className={`voice-palette voice-palette-${theme}`} aria-label="Voice note appearance"><span>Voice color</span><div className="voice-palette-swatches">{[["default","Auto"],["violet","Purple"],["blue","Blue"],["rose","Pink"],["mint","Mint"]].map(([value,label])=><button key={value} type="button" className={"voice-swatch voice-swatch-"+value} title={label} aria-label={label} onClick={()=>{setVoiceHex("");setVoiceColor(value)}}>{value==="default"?"◐":""}</button>)}</div><label className="voice-custom-picker" title="Pick a custom color">✎ <input aria-label="Pick any color" type="color" value={/^#[0-9a-fA-F]{6}$/.test(voiceHex)?voiceHex:"#9274db"} onChange={e=>{setVoiceHex(e.target.value);setVoiceColor(e.target.value)}}/></label><form className="voice-hex-form" onSubmit={e=>{e.preventDefault();if(/^#[0-9a-fA-F]{6}$/.test(voiceHex))setVoiceColor(voiceHex)}}><input aria-label="Hex color" placeholder="#9274DB" maxLength={7} value={voiceHex} onChange={e=>setVoiceHex(e.target.value)} /><button type="submit" disabled={!/^#[0-9a-fA-F]{6}$/.test(voiceHex)}>Apply</button></form></div>}
+    {selectedBoardIds.length>0&&<SelectionControls count={selectedBoardIds.length} locked={selectionLocked} customPalette={Boolean(selectedVoiceId||selectedMusicId)}><button type="button" className="selection-lock" onClick={toggleSelectedLock} aria-label={selectionLocked?"Unlock selected items":"Lock selected items"}>{selectionLocked?"Unlock":"Lock"}{selectedBoardIds.length>1?` (${selectedBoardIds.length})`:""}</button>{selectionLocked&&selectedBoardIds.length===1&&<span className="locked-selection-hint">Locked · selection only</span>}{selectedBoardIds.length===1&&selectedVoiceId&&!selectionLocked&&<div className={`voice-palette voice-palette-${theme}`} aria-label="Voice note appearance"><span>Voice color</span><button type="button" className="media-responsive-toggle" aria-pressed={mediaResponsive} onClick={toggleMediaResponsive}>{mediaResponsive?"✓ Responsive layout":"Responsive layout"}</button><div className="voice-palette-swatches">{[["default","Auto"],["violet","Purple"],["blue","Blue"],["rose","Pink"],["mint","Mint"]].map(([value,label])=><button key={value} type="button" className={"voice-swatch voice-swatch-"+value} title={label} aria-label={label} onClick={()=>{setVoiceHex("");setVoiceColor(value)}}>{value==="default"?"◐":""}</button>)}</div><label className="voice-custom-picker" title="Pick a custom color">✎ <input aria-label="Pick any color" type="color" value={/^#[0-9a-fA-F]{6}$/.test(voiceHex)?voiceHex:"#9274db"} onChange={e=>{setVoiceHex(e.target.value);setVoiceColor(e.target.value)}}/></label><form className="voice-hex-form" onSubmit={e=>{e.preventDefault();if(/^#[0-9a-fA-F]{6}$/.test(voiceHex))setVoiceColor(voiceHex)}}><input aria-label="Hex color" placeholder="#9274DB" maxLength={7} value={voiceHex} onChange={e=>setVoiceHex(e.target.value)} /><button type="submit" disabled={!/^#[0-9a-fA-F]{6}$/.test(voiceHex)}>Apply</button></form></div>}
     {selectedBoardIds.length===1&&selectedMusicId&&!selectionLocked&&<div className={`voice-palette music-palette voice-palette-${theme}`} aria-label="Music and video appearance">
-      <span>Music / video color</span>
+      <span>Music / video color</span><button type="button" className="media-responsive-toggle" aria-pressed={mediaResponsive} onClick={toggleMediaResponsive}>{mediaResponsive?"✓ Responsive layout":"Responsive layout"}</button>
       <div className="voice-palette-swatches">
         {[[ "default","Original",null],["#9274db","Purple","#9274db"],["#5394e8","Blue","#5394e8"],["#e078a7","Pink","#e078a7"],["#3eac98","Mint","#3eac98"],["#d99a44","Amber","#d99a44"]].map(([value,label,tone])=><button key={value} type="button" className={`voice-swatch music-color-swatch ${value==="default"?"music-color-original":""}`} style={tone?{backgroundColor:tone}:undefined} title={label} aria-label={label} onClick={()=>{setMusicHex(tone||"");setMusicColor(value)}}>{value==="default"?"◐":""}</button>)}
       </div>

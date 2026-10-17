@@ -15,7 +15,17 @@ export async function onRequestGet({request,env}){
  if(!env.STICKERS)return new Response("R2 unavailable",{status:503});
  const id=new URL(request.url).searchParams.get("id");
  if(!id||!/^[a-f0-9-]{36}\.(webm|ogg|mp4|mp3)$/.test(id))return new Response("Invalid voice ID",{status:400});
- const item=await env.STICKERS.get("voice/"+id);
+ const range=request.headers.get("range");
+ const item=await env.STICKERS.get("voice/"+id,range?{range:request.headers}:undefined);
  if(!item)return new Response("Voice note not found",{status:404});
- return new Response(item.body,{headers:{"Content-Type":item.httpMetadata?.contentType||"audio/webm","Cache-Control":"private, max-age=300","Accept-Ranges":"none","X-Content-Type-Options":"nosniff"}});
+ const headers={"Content-Type":item.httpMetadata?.contentType||"audio/webm","Cache-Control":"private, max-age=86400","Accept-Ranges":"bytes","X-Content-Type-Options":"nosniff"};
+ if(range&&item.range){
+   const offset=item.range.offset??Math.max(0,item.size-(item.range.suffix??item.size));
+   const length=item.range.length??item.range.suffix??(item.size-offset);
+   headers["Content-Range"]=`bytes ${offset}-${offset+length-1}/${item.size}`;
+   headers["Content-Length"]=String(length);
+   return new Response(item.body,{status:206,headers});
+ }
+ headers["Content-Length"]=String(item.size);
+ return new Response(item.body,{headers});
 }

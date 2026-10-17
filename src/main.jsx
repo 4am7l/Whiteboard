@@ -1,12 +1,18 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { Excalidraw, getCommonBounds, getFreeDrawSvgPath, CaptureUpdateAction } from "@excalidraw/excalidraw";
+import { Excalidraw, getSceneVersion, getCommonBounds, getFreeDrawSvgPath, CaptureUpdateAction } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import "./style.css";
 import "./layout.css";
 import { STICKER_PACKS, getStickerPackItems } from "./stickerPacks";
-import { mediaCardStyle } from "./mediaGeometry";
+import { parseMusicLink } from "./MediaCards";
+import { MediaLayers } from "./MediaLayers";
+import { isVisible } from "./viewport";
+import { useBoardSync } from "./useBoardSync";
+import { StickerThumbnail } from "./StickerThumbnail";
+import { thumbnail } from "./thumbnails";
+import { storageWrite } from "./boardStorage";
 import { segmentHitsImage } from "./imageDrawing";
 
 function SelectionControls({count,locked,customPalette,children}){
@@ -49,81 +55,28 @@ function ImageDrawingControl({image,onToggle}){
 function ImageInkOverlay({images,strokes,viewport}){
   // HTML images (dark-mode originals and GIFs) sit above the canvas. Repeat
   // native freehand paths only in their enabled image regions.
-  const paths=useMemo(()=>strokes.map(e=>{
-    const [x1,y1,x2,y2]=getCommonBounds([e]);
-    return <path key={e.id} d={getFreeDrawSvgPath(e)} fill={e.strokeColor} opacity={(e.opacity??100)/100} transform={`translate(${e.x} ${e.y}) rotate(${(e.angle||0)*180/Math.PI} ${(x1+x2)/2-e.x} ${(y1+y2)/2-e.y})`}/>;
-  }),[strokes]);
+  const cache=useRef(new Map());
+  const paths=useMemo(()=>{
+    if(!images.length||!strokes.length)return [];
+    const bounds=images.map(image=>getCommonBounds([image]));
+    const nextCache=new Map(),result=[];
+    for(const e of strokes){
+      const previous=cache.current.get(e.id),key=e.version+":"+e.versionNonce;
+      let entry=previous?.key===key?previous:null;
+      if(!entry){
+        const rect=getCommonBounds([e]);
+        entry={key,rect,path:null};
+      }
+      nextCache.set(e.id,entry);
+      const [x1,y1,x2,y2]=entry.rect;
+      if(!bounds.some(([a,b,c,d])=>x1<=c&&x2>=a&&y1<=d&&y2>=b))continue;
+      if(!entry.path)entry.path=<path key={e.id} d={getFreeDrawSvgPath(e)} fill={e.strokeColor} opacity={(e.opacity??100)/100} transform={`translate(${e.x} ${e.y}) rotate(${(e.angle||0)*180/Math.PI} ${(x1+x2)/2-e.x} ${(y1+y2)/2-e.y})`}/>;
+      result.push(entry.path);
+    }
+    cache.current=nextCache;return result;
+  },[strokes,images]);
   if(!images.length||!strokes.length)return null;
-  return <svg className="image-ink-overlay" aria-hidden="true"><defs><clipPath id="image-ink-regions" clipPathUnits="userSpaceOnUse">{images.map(e=><rect key={e.id} x={e.x} y={e.y} width={e.width} height={e.height} rx={e.roundness?.type?Math.min(32,e.width/4,e.height/4):0} transform={`rotate(${(e.angle||0)*180/Math.PI} ${e.x+e.width/2} ${e.y+e.height/2})`}/>)}</clipPath></defs><g transform={`translate(${viewport.x*viewport.zoom} ${viewport.y*viewport.zoom}) scale(${viewport.zoom})`}><g clipPath="url(#image-ink-regions)">{paths}</g></g></svg>;
-}
-
-function VoiceNoteCard({element,theme,viewport}){
-  const audioRef=useRef(null);
-  const [playing,setPlaying]=useState(false);
-  const [time,setTime]=useState(0);
-  const [duration,setDuration]=useState(0);
-  const color=element.customData?.voiceColor||"default";
-  const hex=/^#[0-9a-fA-F]{6}$/.test(color)?color:({violet:"#9274db",blue:"#5394e8",rose:"#e078a7",mint:"#3eac98"}[color]||(theme==="dark"?"#a99af6":"#745bd4"));
-  const format=t=>Number.isFinite(t)?Math.floor(t/60)+":"+String(Math.floor(t%60)).padStart(2,"0"):"0:00";
-  const progress=duration>0?Math.min(1,time/duration):0;
-  const bars=Array.from({length:32},(_,i)=>7+Math.round(Math.abs(Math.sin(i*1.73)*Math.cos(i*.39)+Math.sin(i*.91)*.48)*17));
-  return <div className={`voice-card voice-card-${theme} voice-card-chat`} data-voice-element={element.id} style={{"--voice-accent":hex,...mediaCardStyle(element,viewport)}}>
-    <div className="voice-chat-player">
-      <button type="button" className="voice-chat-play" aria-label={playing?"Pause voice note":"Play voice note"} onClick={()=>{const a=audioRef.current;if(!a)return;if(a.paused)a.play().catch(()=>setPlaying(false));else a.pause()}}>{playing?<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 5v14M15 5v14"/></svg>:<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m8 5 11 7-11 7V5Z"/></svg>}</button>
-      <div className="voice-chat-body"><div className="voice-waveform" role="slider" aria-label="Voice playback position" aria-valuemin={0} aria-valuemax={Math.max(1,Math.round(duration))} aria-valuenow={Math.round(time)} tabIndex={0} onPointerDown={e=>{const a=audioRef.current;if(!a||!Number.isFinite(duration)||duration<=0)return;e.stopPropagation();const rect=e.currentTarget.getBoundingClientRect();a.currentTime=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width))*duration}} onKeyDown={e=>{if(e.key==="ArrowRight"||e.key==="ArrowLeft"){e.preventDefault();e.stopPropagation();if(audioRef.current)audioRef.current.currentTime=Math.max(0,Math.min(duration||0,audioRef.current.currentTime+(e.key==="ArrowRight"?5:-5)))}}}>{bars.map((height,i)=><span key={i} className={i/32<=progress?"played":""} style={{height:height+"px"}}/>)}</div><div className="voice-chat-meta"><span>{format(time)} / {format(duration)}</span></div></div>
-    </div>
-    <audio ref={audioRef} preload="metadata" src={"/api/voice-notes?id="+encodeURIComponent(element.customData.voiceNoteId)} onTimeUpdate={e=>setTime(e.currentTarget.currentTime)} onLoadedMetadata={e=>setDuration(e.currentTarget.duration)} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} onEnded={()=>{setPlaying(false);setTime(0)}}/>
-  </div>;
-}
-
-
-function parseMusicLink(raw){
-  try{
-    const u=new URL(raw.trim());const h=u.hostname.toLowerCase().replace(/^www\./,"");
-    if(h==="youtu.be"){const id=u.pathname.split("/")[1];return /^[\w-]{11}$/.test(id)?{provider:"youtube",id}:null}
-    if(["youtube.com","m.youtube.com","music.youtube.com","youtube-nocookie.com"].includes(h)){
-      const id=u.pathname.startsWith("/shorts/")||u.pathname.startsWith("/embed/")?u.pathname.split("/")[2]:u.searchParams.get("v");
-      return /^[\w-]{11}$/.test(id||"")?{provider:"youtube",id}:null;
-    }
-    if(h==="open.spotify.com"){const parts=u.pathname.split("/").filter(Boolean);const index=parts[0]?.startsWith("intl-")?1:0;return parts[index]==="track"&&/^[a-zA-Z0-9]{22}$/.test(parts[index+1]||"")?{provider:"spotify",id:parts[index+1]}:null}
-  }catch{}return null;
-}
-function MusicCard({element,theme,viewport}){
-  const music=element.customData.music;
-  const savedAccent=element.customData?.musicColor;
-  const accent=typeof savedAccent==="string"&&/^#[0-9a-fA-F]{6}$/.test(savedAccent)?savedAccent:null;
-  const audioMode=music.displayMode==="audio";
-  const [active,setActive]=useState(false),[playing,setPlaying]=useState(false),[ready,setReady]=useState(false),[elapsed,setElapsed]=useState(0),[duration,setDuration]=useState(0),[failed,setFailed]=useState(false);
-  const mount=useRef(null),player=useRef(null);
-  const youtube=music.provider==="youtube";
-  const embed=youtube?"https://www.youtube-nocookie.com/embed/"+music.id+"?autoplay=1&rel=0":"https://open.spotify.com/embed/track/"+music.id;
-  const url=music.provider==="preview"?(music.url||"https://music.apple.com"):youtube?"https://www.youtube.com/watch?v="+music.id:"https://open.spotify.com/track/"+music.id;
-  useEffect(()=>{
-    if(!audioMode||!youtube||!mount.current)return;
-    let disposed=false;
-    const initialize=()=>{
-      if(disposed||!mount.current||!window.YT?.Player||player.current)return;
-      const node=document.createElement("div");mount.current.appendChild(node);
-      player.current=new window.YT.Player(node,{videoId:music.id,width:240,height:200,playerVars:{controls:0,playsinline:1,rel:0},events:{
-        onReady:e=>{if(!disposed){setReady(true);e.target.setVolume(80)}},
-        onStateChange:e=>{if(!disposed)setPlaying(e.data===window.YT.PlayerState.PLAYING)},
-        onError:()=>{if(!disposed)setFailed(true)}
-      }});
-    };
-    if(window.YT?.Player)initialize();else{
-      const prior=window.onYouTubeIframeAPIReady;
-      window.onYouTubeIframeAPIReady=()=>{prior?.();initialize()};
-      if(!document.querySelector("script[data-youtube-iframe-api]")){const script=document.createElement("script");script.src="https://www.youtube.com/iframe_api";script.dataset.youtubeIframeApi="1";document.head.appendChild(script)}
-    }
-    return()=>{disposed=true;try{player.current?.destroy?.()}catch{}player.current=null;if(mount.current)mount.current.replaceChildren()};
-  },[audioMode,youtube,music.id]);
-  useEffect(()=>{if(!ready)return;const timer=setInterval(()=>{try{setElapsed(player.current?.getCurrentTime?.()||0);setDuration(player.current?.getDuration?.()||0)}catch{}},600);return()=>clearInterval(timer)},[ready]);
-  const fmt=t=>Math.floor(t/60)+":"+String(Math.floor(t%60)).padStart(2,"0");
-  const toggle=()=>{if(!ready)return;playing?player.current?.pauseVideo?.():player.current?.playVideo?.()};
-  return <div className={`music-card music-card-${theme} music-glass-card ${audioMode?"music-glass-audio":"music-glass-video"} ${accent?"music-glass-tinted":""}`} data-music-element={element.id} style={{...(accent?{"--music-accent":accent}:{}),...mediaCardStyle(element,viewport)}}>
-    {audioMode&&youtube?<><div className="music-glass-hidden" aria-hidden="true"><div ref={mount}/></div><div className="music-glass-cover">{music.thumbnail?<img src={music.thumbnail} alt="Album artwork"/>:<div className="music-glass-art">♪</div>}<button type="button" className="music-glass-cover-play" onClick={toggle} disabled={!ready||failed} aria-label={playing?"Pause":"Play"}><svg viewBox="0 0 24 24" width="19" height="19" fill="currentColor">{playing?<path d="M6 4h4v16H6zm8 0h4v16h-4z"/>:<path d="M8 4v16l12-8z"/>}</svg></button></div><div className="music-glass-body"><div className="music-glass-title" title={music.title}>{music.title||"Music"}</div><div className="music-glass-artist">{music.channel||"YouTube"}</div><input type="range" aria-label="Song progress" min="0" max={Math.max(duration,1)} value={Math.min(elapsed,duration||1)} onChange={e=>{player.current?.seekTo?.(Number(e.target.value),true);setElapsed(Number(e.target.value))}}/><div className="music-glass-times"><span>{fmt(elapsed)}</span><span>{fmt(duration)}</span></div></div><a className="music-glass-link" href={url} target="_blank" rel="noopener noreferrer" aria-label="Open original"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 4h6v6M20 4l-9 9"/><path d="M20 13v6H5V4h6"/></svg></a>{failed&&<a className="music-glass-failure" href={url} target="_blank" rel="noopener noreferrer">Open on YouTube</a>}</>
-    :<><div className="music-glass-video-top"><span>{music.title||"YouTube video"}</span><a href={url} target="_blank" rel="noopener noreferrer" aria-label="Open original"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 4h6v6M20 4l-9 9"/><path d="M20 13v6H5V4h6"/></svg></a></div>{music.provider==="preview"?<div className="music-preview-player"><strong>{music.title}</strong><audio controls src={music.previewUrl}/></div>:active?<iframe title="Song player" src={embed} allow="autoplay;encrypted-media;fullscreen;picture-in-picture" allowFullScreen referrerPolicy="strict-origin-when-cross-origin"/>:<button type="button" className="music-glass-video-poster" onClick={()=>setActive(true)} style={music.thumbnail?{backgroundImage:`linear-gradient(#0002,#0005),url("${music.thumbnail}")`}:undefined}><span className="music-glass-video-play"><svg viewBox="0 0 24 24" width="25" height="25" fill="currentColor"><path d="M8 4v16l12-8z"/></svg></span></button>}</>}
-  </div>;
+  return <svg className="image-ink-overlay" aria-hidden="true"><defs><clipPath id="image-ink-regions" clipPathUnits="userSpaceOnUse">{images.map(e=><rect key={e.id} x={e.x} y={e.y} width={e.width} height={e.height} rx={e.roundness?.type?Math.min(32,e.width/4,e.height/4):0} transform={`rotate(${(e.angle||0)*180/Math.PI} ${e.x+e.width/2} ${e.y+e.height/2})`}/>)}</clipPath></defs><g className="image-ink-world"><g clipPath="url(#image-ink-regions)">{paths}</g></g></svg>;
 }
 
 // Include complete groups, frame contents and attached text when selecting a lock.
@@ -160,6 +113,9 @@ function App() {
   const [searchSource,setSearchSource]=useState("giphy");
   const [favoriteIds,setFavoriteIds]=useState([]);
   const [stickerTab,setStickerTab]=useState("saved");
+  const [savedPage,setSavedPage]=useState(1);
+  const [stickerCursor,setStickerCursor]=useState(null);
+  const [stickerLoading,setStickerLoading]=useState(false);
   const [selectedPack,setSelectedPack]=useState(null);
   const [packItems,setPackItems]=useState([]);
   const [packQuery,setPackQuery]=useState("");
@@ -173,6 +129,18 @@ function App() {
   const draggingSticker=useRef(null);
   const imageLoads=useRef(new Map());
   const imageUploads=useRef(new Set());
+  const imageQueue=useRef(new Map());
+  const imageInFlight=useRef(new Set());
+  const imageReadQueue=useRef(new Map());
+  const imageReadActive=useRef(0);
+  const sceneCache=useRef(null);
+  const elementViews=useRef(new Map());
+  const blockedImages=useRef([]);
+  const viewFrame=useRef(0);
+  const boardRoot=useRef(null);
+  const viewNext=useRef(null);
+  const [imageStatus,setImageStatus]=useState("");
+  const [lightMode,setLightMode]=useState(()=>{try{return localStorage.getItem("whiteboard-performance")==="light"}catch{return false}});
   const [sceneImages,setSceneImages]=useState([]);
   const [imageSources,setImageSources]=useState({});
   const [voiceCards,setVoiceCards]=useState([]);
@@ -210,7 +178,7 @@ function App() {
   apiRef.current = api;
 
   useEffect(() => {
-    fetch("/api/board", { cache: "no-store" }).then(r => { if (r.ok) setAuthorized(true); }).catch(() => {});
+    fetch("/api/session", { cache: "no-store" }).then(r => { if (r.ok) setAuthorized(true); }).catch(() => {});
   }, []);
 
   async function login(event) {
@@ -224,7 +192,7 @@ function App() {
   }
 
   async function logout() {
-    if (pending.current.size) {
+    if (pending.current.size || imageQueue.current.size) {
       setStatus("Please wait for your changes to save before logging out");
       return;
     }
@@ -245,81 +213,16 @@ function App() {
     }
   }
 
-  useEffect(() => {
-    if (!api || !authorized) return;
-    let active = true;
-    let busy = false;
-    async function sync() {
-      if (busy || pending.current.size) return;
-      busy = true;
-      try {
-        const response = await fetch("/api/board", { cache: "no-store" });
-        if (!response.ok) throw new Error("Database unavailable");
-        const { elements } = await response.json();
-        if (!active) return;
-        const local = apiRef.current.getSceneElementsIncludingDeleted();
-        const merged = new Map(local.map(e => [e.id, e]));
-        let changed = false;
-        for (const element of elements) {
-          const current = merged.get(element.id);
-          const incomingVersion = element.version ?? 0;
-          const localVersion = current?.version ?? -1;
-          if (!current || incomingVersion > localVersion || (incomingVersion === localVersion && (element.versionNonce ?? 0) !== (current.versionNonce ?? 0) && !pending.current.has(element.id))) {
-            merged.set(element.id, element);
-            changed = true;
-          }
-          known.current.set(element.id, Math.max(known.current.get(element.id) ?? -1, incomingVersion));
-        }
-        await Promise.all(elements.filter(e=>e.type==="image"&&!e.isDeleted).map(e=>String(e.fileId||"").startsWith("sticker:")?loadImageFile(e.fileId).catch(()=>{}):restoreBoardImage(e.fileId).catch(()=>{})));
-        if (changed) {
-          applying.current = true;
-          lockedSnapshot.current=new Map(); // Accept normalized remote elements on the next onChange.
-          apiRef.current.updateScene({ elements: [...merged.values()] });
-          queueMicrotask(() => { applying.current = false; });
-        }
-        loaded.current = true;
-        setStatus("Connected");
-      } catch { setStatus("Offline — changes may not be saved"); }
-      finally { busy = false; }
-    }
-    sync();
-    const timer = setInterval(sync, 1800);
-    return () => { active = false; clearInterval(timer); };
-  }, [api, authorized]);
+  const sync = useBoardSync({api, authorized, pending, loaded, applying, lockedSnapshot, setStatus,
+    onImages: queueSceneImages, hasImageUploads: () => imageQueue.current.size > 0});
 
-  useEffect(() => {
-    if (!api || !authorized) return;
-    let active = true;
-    let busy = false;
-    async function flush() {
-      if (busy || !loaded.current || !pending.current.size) return;
-      busy = true;
-      // Keep each D1 write below the API's 2000-element / 20MB limits.
-      const batch = [];
-      let bytes = 15;
-      for (const element of pending.current.values()) {
-        const size = JSON.stringify(element).length + 1;
-        if (batch.length && (batch.length >= 500 || bytes + size > 18000000)) break;
-        batch.push(element);
-        bytes += size;
-      }
-      try {
-        const response = await fetch("/api/board", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ elements: batch }) });
-        if (!response.ok) {
-          const detail = await response.json().catch(() => ({}));
-          throw new Error(detail.error || "Save failed");
-        }
-        if (!active) return;
-        for (const element of batch) {
-          if (pending.current.get(element.id)?.versionNonce === element.versionNonce) pending.current.delete(element.id);
-        }
-        setStatus("Saved");
-      } catch (error) { console.error("Board save failed:", error); setStatus("Save failed — retrying"); }
-      finally { busy = false; }
-    }
-    const timer = setInterval(flush, 900);
-    return () => { active = false; clearInterval(timer); };
-  }, [api, authorized]);
+  useEffect(()=>{
+    if(!api||!authorized)return;
+    const board=document.querySelector(".board");let timer;
+    const busy=event=>{if(event.type==="pointermove"&&!event.buttons)return;board.classList.add("board-interacting");clearTimeout(timer);timer=setTimeout(()=>board.classList.remove("board-interacting"),180)};
+    board.addEventListener("wheel",busy,{passive:true});board.addEventListener("pointermove",busy,{passive:true});
+    return()=>{clearTimeout(timer);board.classList.remove("board-interacting");board.removeEventListener("wheel",busy);board.removeEventListener("pointermove",busy)};
+  },[api,authorized]);
 
   useEffect(() => {
     if (!authorized || !api) return;
@@ -397,7 +300,7 @@ function App() {
     const root = document.querySelector(".board .excalidraw");
     if (!root) return;
     let drag = null;
-    let suppressMenu = false;
+    let suppressMenu = false, panFrame=0, panNext=null;
     function down(event) {
       if (event.button !== 2 || !event.target.closest(".excalidraw__canvas")) return;
       drag = { x: event.clientX, y: event.clientY, scrollX: api.getAppState().scrollX, scrollY: api.getAppState().scrollY, moved: false };
@@ -410,7 +313,8 @@ function App() {
       drag.moved = true;
       event.preventDefault();
       const zoom = api.getAppState().zoom?.value || 1;
-      api.updateScene({ appState: { scrollX: drag.scrollX + dx / zoom, scrollY: drag.scrollY + dy / zoom } });
+      panNext={scrollX:drag.scrollX+dx/zoom,scrollY:drag.scrollY+dy/zoom};
+      if(!panFrame)panFrame=requestAnimationFrame(()=>{panFrame=0;api.updateScene({appState:panNext})});
     }
     function up(event) {
       if (event.button !== 2 || !drag) return;
@@ -429,6 +333,7 @@ function App() {
     window.addEventListener("pointerup", up, true);
     root.addEventListener("contextmenu", context, true);
     return () => {
+      cancelAnimationFrame(panFrame);
       root.removeEventListener("pointerdown", down, true);
       window.removeEventListener("pointermove", move, true);
       window.removeEventListener("pointerup", up, true);
@@ -654,12 +559,13 @@ function App() {
       }
     }catch(e){setStickerError(e.message)}
   }
-  async function loadStickers() {
+  async function loadStickers(more=false) {
+    if(stickerLoading)return;setStickerLoading(true);
     try {
-      const r=await fetch("/api/stickers",{cache:"no-store"});
+      const r=await fetch("/api/stickers"+(more&&stickerCursor?"?cursor="+encodeURIComponent(stickerCursor):""),{cache:"no-store"});
       if(!r.ok)throw Error("Sticker storage unavailable");
-      setStickers((await r.json()).stickers);
-    }catch(e){setStickerError(e.message)}
+      const data=await r.json();setStickerCursor(data.cursor||null);setStickers(old=>more?[...new Map([...old,...data.stickers].map(item=>[item.id,item])).values()]:data.stickers);
+    }catch(e){setStickerError(e.message)}finally{setStickerLoading(false)}
   }
   useEffect(()=>{if(!authorized)return;loadStickers();fetch("/api/sticker-favorites").then(r=>r.ok?r.json():null).then(d=>{if(d)setFavoriteIds(d.ids)}).catch(()=>{});},[authorized]);
   useEffect(()=>{
@@ -686,7 +592,7 @@ function App() {
   async function uploadSticker(event) {
     const files=[...event.target.files];event.target.value="";
     for(const file of files){
-      const form=new FormData();form.append("file",file);
+      const form=new FormData();form.append("file",file);const preview=await thumbnail(file);if(preview)form.append("preview",preview,"preview.webp");
       try{const r=await fetch("/api/stickers",{method:"POST",body:form});
         const data=await r.json();if(!r.ok)throw Error(data.error||"Upload failed");
       }catch(e){setStickerError(e.message)}
@@ -697,34 +603,83 @@ function App() {
     if(!fileId||String(fileId).startsWith("sticker:")||apiRef.current?.getFiles()?.[fileId])return;
     if(imageLoads.current.has(fileId))return imageLoads.current.get(fileId);
     const task=(async()=>{
-      const response=await fetch("/api/board-image?id="+encodeURIComponent(fileId),{cache:"no-store"});
+      const response=await fetch("/api/board-image?id="+encodeURIComponent(fileId),{signal:AbortSignal.timeout(30000)});
       if(!response.ok)throw Error("Saved image unavailable");
       const blob=await response.blob();
       const dataURL=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(blob)});
+      imageUploads.current.add(fileId);
       apiRef.current?.addFiles([{id:fileId,dataURL,mimeType:blob.type||"image/png",created:Date.now(),lastRetrieved:Date.now()}]);
     })();
     imageLoads.current.set(fileId,task);
     try{await task}finally{imageLoads.current.delete(fileId)}
   }
-  function persistBoardImages(elements,files){
-    if(!files)return;
-    for(const element of elements){
-      if(element.isDeleted||element.type!=="image"||!element.fileId||String(element.fileId).startsWith("sticker:"))continue;
-      const file=files[element.fileId];
-      if(!file?.dataURL||imageUploads.current.has(element.fileId))continue;
-      imageUploads.current.add(element.fileId);
-      fetch("/api/board-image",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:element.fileId,dataURL:file.dataURL})})
-        .then(response=>{if(!response.ok)throw Error("Image upload failed")})
-        .catch(()=>{imageUploads.current.delete(element.fileId);setStatus("Image save failed — retry by editing the board")});
+  function queueSceneImages(elements){
+    for(const e of elements){
+      if(e.isDeleted||e.type!=="image"||!e.fileId)continue;
+      // A remote image may have a locally queued replacement; don't discard it.
+      if(!String(e.fileId).startsWith("sticker:")&&!imageQueue.current.has(e.fileId))imageUploads.current.add(e.fileId);
+      if(!apiRef.current?.getFiles()?.[e.fileId])imageReadQueue.current.set(e.fileId,e);
+    }
+    pumpImageReads();
+  }
+  function pumpImageReads(){
+    const state=apiRef.current?.getAppState();if(!state)return;
+    const view={x:state.scrollX,y:state.scrollY,zoom:state.zoom.value};
+    const sorted=[...imageReadQueue.current.entries()].sort((a,b)=>Number(isVisible(b[1],view,innerWidth,innerHeight))-Number(isVisible(a[1],view,innerWidth,innerHeight)));
+    while(imageReadActive.current<3&&sorted.length){
+      const [id]=sorted.shift();imageReadQueue.current.delete(id);imageReadActive.current++;
+      const task=String(id).startsWith("sticker:")?loadImageFile(id):restoreBoardImage(id);
+      task.catch(()=>setImageStatus("بعض الصور لم تُحمّل؛ أعد المحاولة من زر الصور")).finally(()=>{imageReadActive.current--;pumpImageReads()});
     }
   }
+  function persistBoardImages(elements,files){
+    if(!files)return;
+    const live=new Set();
+    for(const e of elements){
+      if(e.isDeleted||e.type!=="image"||!e.fileId||String(e.fileId).startsWith("sticker:"))continue;
+      live.add(e.fileId);
+      const file=files[e.fileId];
+      if(!file?.dataURL||imageUploads.current.has(e.fileId)||imageQueue.current.has(e.fileId))continue;
+      const record={...file,id:e.fileId};
+      imageQueue.current.set(e.fileId,record);
+      storageWrite("images",[record]).catch(()=>setImageStatus("تعذّر حفظ الصورة محليًا؛ انتظر اكتمال رفعها"));
+    }
+    for(const id of imageQueue.current.keys())if(!live.has(id)&&!imageInFlight.current.has(id)){
+      imageQueue.current.delete(id);storageWrite("images",[],[id]).catch(()=>{});
+    }
+    pumpImageUploads();
+  }
+  function pumpImageUploads(){
+    if(!authorized||!apiRef.current)return;
+    for(const [id,file] of imageQueue.current){
+      if(imageInFlight.current.size>=2)break;
+      if(imageInFlight.current.has(id))continue;
+      imageInFlight.current.add(id);setImageStatus("جارٍ حفظ الصور…");
+      (async()=>{
+        const blob=await (await fetch(file.dataURL)).blob();
+        if(blob.size>30*1024*1024)throw Error("صورة أكبر من 30 MB؛ احذفها وأضف نسخة أصغر");
+        const form=new FormData();form.append("id",id);form.append("file",blob,"image");
+        const response=await fetch("/api/board-image",{method:"POST",body:form,signal:AbortSignal.timeout(60000)});
+        if(!response.ok)throw Error("تعذّر رفع صورة؛ سنعيد المحاولة");
+        imageUploads.current.add(id);imageQueue.current.delete(id);
+        await storageWrite("images",[],[id]).catch(()=>{});
+        setImageStatus(imageQueue.current.size?"جارٍ حفظ الصور…":"");
+      })().catch(error=>setImageStatus(error.message)).finally(()=>imageInFlight.current.delete(id));
+    }
+  }
+  useEffect(()=>{
+    if(!authorized)return;
+    const timer=setInterval(()=>pumpImageUploads(),4000);
+    return()=>clearInterval(timer);
+  },[authorized,api]);
+  useEffect(()=>()=>cancelAnimationFrame(viewFrame.current),[]);
   async function loadImageFile(fileId) {
     if(!apiRef.current||!fileId?.startsWith("sticker:"))return;
     if(apiRef.current.getFiles()[fileId])return;
     if(imageLoads.current.has(fileId))return imageLoads.current.get(fileId);
     const task=(async()=>{
       const id=fileId.slice(8);
-      const r=await fetch("/api/sticker-file?id="+encodeURIComponent(id));
+      const r=await fetch("/api/sticker-file?id="+encodeURIComponent(id),{signal:AbortSignal.timeout(30000)});
       if(!r.ok)throw Error("Image unavailable");
       const blob=await r.blob();
       const source=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(blob)});
@@ -836,7 +791,7 @@ function App() {
     const board=document.querySelector(".board");if(!board)return;
     let gesture=null,forwarding=false;
     const point=e=>{const state=api.getAppState(),r=board.getBoundingClientRect();return {x:(e.clientX-r.left)/state.zoom.value-state.scrollX,y:(e.clientY-r.top)/state.zoom.value-state.scrollY}};
-    const blocked=(a,b)=>api.getSceneElements().some(e=>e.type==="image"&&!e.isDeleted&&!e.customData?.allowDrawing&&segmentHitsImage(a,b,e));
+    const blocked=(a,b)=>blockedImages.current.some(e=>segmentHitsImage(a,b,e));
     const stop=e=>{e.preventDefault();e.stopImmediatePropagation()};
     const down=e=>{
       if(e.button!==0||api.getAppState().activeTool.type!=="freedraw"||!e.target.closest?.("canvas"))return;
@@ -965,7 +920,7 @@ function App() {
     const id=crypto.randomUUID();
     const element={id,type:"rectangle",x:(state.width/2)/zoom-(state.scrollX||0)-width/2,y:(state.height/2)/zoom-(state.scrollY||0)-height/2,width,height,angle:0,strokeColor:"transparent",backgroundColor:"transparent",fillStyle:"solid",strokeWidth:2,strokeStyle:"solid",roughness:0,opacity:100,groupIds:[],frameId:null,roundness:{type:3},seed:Math.floor(Math.random()*2147483647),version:1,versionNonce:Math.floor(Math.random()*2147483647),isDeleted:false,boundElements:null,updated:Date.now(),link:null,locked:false,customData:{music:{...music,title,displayMode,thumbnail,channel}}};
     editor.updateScene({elements:[...editor.getSceneElementsIncludingDeleted(),element],appState:{selectedElementIds:{[id]:true}}});
-    pending.current.set(id,element);known.current.set(id,1);setMusicCards(old=>[...old,element]);setMusicOpen(false);setMusicError("");
+    pending.current.set(id,element);known.current.set(id,1);setMusicOpen(false);setMusicError("");
   }
   async function searchMusic(e){
     e.preventDefault();const q=musicInput.trim();if(!q)return;
@@ -992,7 +947,7 @@ function App() {
     const element={id,type:"rectangle",x,y,width,height,angle:0,strokeColor:"transparent",backgroundColor:"transparent",fillStyle:"solid",strokeWidth:2,strokeStyle:"solid",roughness:0,opacity:100,groupIds:[],frameId:null,roundness:{type:3},seed:Math.floor(Math.random()*2147483647),version:1,versionNonce:Math.floor(Math.random()*2147483647),isDeleted:false,boundElements:null,updated:Date.now(),link:null,locked:false,customData:{voiceNoteId:audioId}};
     editor.updateScene({elements:[...editor.getSceneElementsIncludingDeleted(),element],appState:{selectedElementIds:{[id]:true}}});
     pending.current.set(id,element);known.current.set(id,1);
-    setVoiceCards(old=>[...old,element]);
+
   }
   async function startVoice(){
     if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){setStickerError("Voice recording is not supported in this browser");return}
@@ -1054,6 +1009,10 @@ function App() {
   }
 
   function onChange(elements, appState, files) {
+    const sceneVersion=getSceneVersion(elements);
+    const changed=sceneCache.current?.elements!==elements||sceneCache.current?.version!==sceneVersion;
+    const filesChanged=sceneCache.current?.files!==files;
+    if(changed){
     if(!applying.current){
       let repaired=false;
       const comparable=e=>JSON.stringify(Object.fromEntries(Object.entries(e).filter(([key])=>!["version","versionNonce","updated","locked"].includes(key))));
@@ -1076,60 +1035,46 @@ function App() {
       const previous=lockedSnapshot.current.get(e.id);
       return [e.id,previous&&previous.version===e.version&&previous.versionNonce===e.versionNonce?previous:structuredClone(e)];
     }));
-    lastSelection.current={...appState?.selectedElementIds};
-    persistBoardImages(elements,files);
-    const images=elements.filter(e=>e.type==="image"&&!e.isDeleted&&e.fileId);
-    const voices=elements.filter(e=>!e.isDeleted&&e.customData?.voiceNoteId);
-    const musics=elements.filter(e=>!e.isDeleted&&e.customData?.music?.id);
-    const liveZoom=appState?.zoom?.value||1,liveX=appState?.scrollX||0,liveY=appState?.scrollY||0;
-    // Update GIF geometry immediately, without waiting for a React render while dragging.
-    for(const element of [...voices,...musics]){
-      const card=document.querySelector(element.customData?.music?`.music-card[data-music-element="${element.id}"]`:`.voice-card[data-voice-element="${element.id}"]`);
-      if(!card)continue;
-      const style=mediaCardStyle(element,{x:liveX,y:liveY,zoom:liveZoom});
-      for(const key of ["left","top","width","height"])card.style[key]=style[key]+"px";
-      card.style.transform=style.transform;
-      card.style.transformOrigin=style.transformOrigin;
-      card.style.opacity=String(style.opacity);
-      card.style.containerType=style.containerType||"";
-      card.style.overflow=style.overflow||"";
+
+      const images=[],voices=[],musics=[],strokes=[];
+      const nextViews=new Map();
+      for(const source of elements){
+        if(source.isDeleted)continue;
+        if(source.type!=="image"&&source.type!=="freedraw"&&!source.customData?.voiceNoteId&&!source.customData?.music?.id)continue;
+        const previous=elementViews.current.get(source.id);
+        const e=previous&&previous.version===source.version&&previous.versionNonce===source.versionNonce?previous:{...source};
+        nextViews.set(e.id,e);
+        if(e.type==="image"&&e.fileId)images.push(e);
+        if(e.customData?.voiceNoteId)voices.push(e);
+        if(e.customData?.music?.id)musics.push(e);
+        if(e.type==="freedraw")strokes.push(e);
+      }
+      elementViews.current=nextViews;
+      blockedImages.current=images.filter(e=>!e.customData?.allowDrawing);
+      const same=(old,next)=>old.length===next.length&&old.every((e,i)=>e===next[i]);
+      setInkStrokes(old=>same(old,strokes)?old:strokes);
+      setSceneImages(old=>same(old,images)?old:images);
+      setVoiceCards(old=>same(old,voices)?old:voices);
+      setMusicCards(old=>same(old,musics)?old:musics);
+      sync.observe(elements);
     }
-    for(const element of images){
-      const img=document.querySelector(`.animated-stickers img[data-sticker-element="${element.id}"]`);
-      if(!img)continue;
-      img.style.left=((element.x+liveX)*liveZoom)+"px";
-      img.style.top=((element.y+liveY)*liveZoom)+"px";
-      img.style.width=(element.width*liveZoom)+"px";
-      img.style.height=(element.height*liveZoom)+"px";
-      img.style.transform=`rotate(${element.angle||0}rad) scale(${(element.scale||[1,1])[0]},${(element.scale||[1,1])[1]})`;
-      img.style.opacity=String((element.opacity??100)/100);
-      img.style.borderRadius=element.roundness?.type?Math.min(32,element.width/4,element.height/4)*liveZoom+"px":"0px";
+    if(changed||filesChanged){
+      persistBoardImages(elements,files);
+      // Keep only referenced sources, and reuse the original strings.
+      const available=files||apiRef.current?.getFiles?.()||{};
+      const sources={};
+      for(const e of elements)if(!e.isDeleted&&e.type==="image"&&available[e.fileId]?.dataURL)sources[e.fileId]=available[e.fileId].dataURL;
+      setImageSources(old=>Object.keys(old).length===Object.keys(sources).length&&Object.keys(sources).every(id=>old[id]===sources[id])?old:sources);
     }
-    const strokes=elements.filter(e=>e.type==="freedraw"&&!e.isDeleted);
-    setInkStrokes(old=>old.length===strokes.length&&old.every((e,i)=>e.id===strokes[i].id&&e.version===strokes[i].version&&e.versionNonce===strokes[i].versionNonce)?old:strokes.map(e=>({...e})));
-    setSceneImages(old=>old.length===images.length&&old.every((e,i)=>e===images[i])?old:images);
-    if(theme==="dark"){
-      const available=apiRef.current?.getFiles?.()||files||{};
-      setImageSources(old=>{
-        let next=null;
-        for(const e of images){
-          if(String(e.fileId).endsWith(".gif")||old[e.fileId])continue;
-          const source=available[e.fileId]?.dataURL;
-          if(source){if(!next)next={...old};next[e.fileId]=source}
-        }
-        return next||old;
-      });
-    }
-    setVoiceCards(old=>old.length===voices.length&&old.every((e,i)=>e===voices[i])?old:voices);
-    setMusicCards(old=>old.length===musics.length&&old.every((e,i)=>e===musics[i])?old:musics);
-    if (appState) {
+    if (appState && (changed || lastSelection.current!==appState.selectedElementIds || sceneCache.current?.tool!==appState.activeTool?.type)) {
       const isPen=appState.activeTool?.type==="freedraw";
       setPenActive(old=>old===isPen?old:isPen);
       const selectedIds=Object.keys(appState.selectedElementIds||{}).filter(id=>appState.selectedElementIds[id]);
-      setSelectionLocked(elements.some(e=>!e.isDeleted&&e.locked&&selectedIds.includes(e.id)));
-      setSelectedBoardIds(old=>old.length===selectedIds.length&&old.every(id=>selectedIds.includes(id))?old:selectedIds);
+      const selectedSet=new Set(selectedIds),byId=new Map(elements.map(e=>[e.id,e]));
+      setSelectionLocked(selectedIds.some(id=>{const e=byId.get(id);return e&&!e.isDeleted&&e.locked}));
+      setSelectedBoardIds(old=>old.length===selectedIds.length&&old.every(id=>selectedSet.has(id))?old:selectedIds);
       const mediaOnly=selectedIds.length>0&&selectedIds.every(id=>{
-        const item=elements.find(e=>e.id===id);
+        const item=byId.get(id);
         return item&&!item.isDeleted&&(item.customData?.voiceNoteId||item.customData?.music?.id);
       });
       document.querySelector(".board")?.classList.toggle("board-media-selected",Boolean(mediaOnly));
@@ -1138,25 +1083,34 @@ function App() {
       const selectedMusic=selectedIds.length===1?elements.find(e=>!e.isDeleted&&e.customData?.music&&appState.selectedElementIds?.[e.id]):null;
       setSelectedMusicId(old=>old===(selectedMusic?.id||null)?old:(selectedMusic?.id||null));
       setMediaResponsive(Boolean((selectedMusic||selected)?.customData?.mediaResponsiveLayout));
+    }
+    if(appState){
       const next = { zoom: appState.zoom?.value || 1, x: appState.scrollX || 0, y: appState.scrollY || 0 };
-      setViewport(old => old.zoom === next.zoom && old.x === next.x && old.y === next.y ? old : next);
-    }
-    if (!loaded.current || applying.current) return;
-    for (const element of elements) {
-      if ((element.version ?? 0) > (known.current.get(element.id) ?? -1)) {
-        known.current.set(element.id, element.version ?? 0);
-        pending.current.set(element.id, element);
+      const previous=viewNext.current;
+      if(!previous||previous.x!==next.x||previous.y!==next.y||previous.zoom!==next.zoom){
+        boardRoot.current?.style.setProperty("--world-x",next.x*next.zoom+"px");
+        boardRoot.current?.style.setProperty("--world-y",next.y*next.zoom+"px");
+        boardRoot.current?.style.setProperty("--world-zoom",String(next.zoom));
       }
+      viewNext.current=next;
+      if((!previous||previous.x!==next.x||previous.y!==next.y||previous.zoom!==next.zoom)&&!viewFrame.current)viewFrame.current=requestAnimationFrame(()=>{
+        viewFrame.current=0;const view=viewNext.current;
+        setViewport(old=>old.zoom===view.zoom&&old.x===view.x&&old.y===view.y?old:view);
+      });
     }
+    lastSelection.current=appState?.selectedElementIds;
+    sceneCache.current={elements,files,version:sceneVersion,tool:appState?.activeTool?.type};
   }
 
   if (!authorized) return <form className="login" onSubmit={login}><h1>Our Whiteboard ♡</h1><p>Enter our 6-digit code</p><input aria-label="6-digit code" type="password" inputMode="numeric" autoComplete="off" maxLength={6} pattern="[0-9]{6}" required value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ""))}/><button type="submit">Open board</button><p role="alert">{loginError}</p></form>;
-  return <main className={`workspace workspace-${theme}`}>
+  return <main className={`workspace workspace-${theme} ${lightMode?"performance-light":""}`}>
+    <div className="save-indicator" role="status" aria-live="polite"><span>{status}</span>{imageStatus&&<span>{imageStatus} <button type="button" onClick={()=>{queueSceneImages(apiRef.current?.getSceneElements()||[]);pumpImageUploads()}}>إعادة محاولة الصور</button></span>}{sync.storageError&&<span>الحفظ المحلي غير متاح؛ لا تغلق الصفحة قبل الحفظ</span>}{sync.conflicts.length>0&&<span>تعارضت {sync.conflicts.length} تعديلات؛ احتفظنا بنسختك. <button type="button" onClick={sync.restoreConflicts}>استبدالها بنسختي</button></span>}</div>
     <div className={`workspace-toolbox ${toolsOpen?"is-open":""}`}>
-      <button type="button" className="workspace-toolbox-trigger" onClick={()=>{if(toolsOpen)closePanels();setToolsOpen(open=>!open)}} aria-expanded={toolsOpen} aria-controls="workspace-tools-menu" aria-label={toolsOpen?"Close tools menu":"Open tools menu"}>
+      <button type="button" className="workspace-toolbox-trigger" onClick={()=>{if(toolsOpen)closePanels();setToolsOpen(open=>!open)}} aria-expanded={toolsOpen} aria-controls="workspace-tools-menu" disabled={!sync.ready} aria-label={toolsOpen?"Close tools menu":"Open tools menu"}>
         <span aria-hidden="true">{toolsOpen?"×":"☰"}</span><span className="workspace-toolbox-label">{toolsOpen?"Close":"Tools"}</span>
       </button>
-      <aside id="workspace-tools-menu" className="workspace-toolbar" aria-label="Board tools" aria-hidden={!toolsOpen} inert={!toolsOpen}><div className="music-controls"><button type="button" aria-expanded={musicOpen} onClick={()=>togglePanel("music")}>♫ Music</button>{musicOpen&&<section aria-label="Add music" className={"music-panel music-panel-"+theme}><button className="panel-close" type="button" onClick={()=>setMusicOpen(false)} aria-label="Close music">×</button><form onSubmit={searchMusic}><input aria-label="Song name or link" placeholder="Song name or YouTube / Spotify URL" value={musicInput} onChange={e=>setMusicInput(e.target.value)}/><button type="submit" disabled={musicBusy}>{musicBusy?"Searching…":"Search / Add"}</button></form>{musicError&&<small role="alert">{musicError}</small>}<div className="music-results">{musicResults.map(item=><div key={item.id} className="music-result">{item.thumbnail&&<img src={item.thumbnail} alt=""/>}<div><strong>{item.title}</strong><small>{item.channel}</small><div className="music-add-options"><button type="button" onClick={()=>addMusicCard("https://www.youtube.com/watch?v="+item.id,item.title,"audio",item.thumbnail,item.channel)}>Add audio</button><button type="button" onClick={()=>addMusicCard("https://www.youtube.com/watch?v="+item.id,item.title,"video",item.thumbnail,item.channel)}>Add video</button></div></div></div>)}</div><small>Choose Audio for a compact song card, or Video for the YouTube player. Some videos restrict embedding.</small></section>}</div><div className="voice-controls"><button type="button" disabled={voiceBusy} onClick={recording?stopVoice:startVoice}>{voiceBusy?"Saving…":recording?"■ Stop voice":"🎙 Voice note"}</button>{recording&&<button type="button" className="voice-cancel-recording" onClick={cancelVoice} title="Discard this recording without saving" aria-label="Discard voice recording">🗑 Cancel</button>}{recording&&<span className="voice-live">● Recording</span>}</div><button type="button" className={`theme-toggle ${theme==="dark"?"theme-toggle--dark":"theme-toggle--light"}`} title="Change theme" onClick={toggleTheme} aria-label="Toggle dark mode">{theme==="dark"?"☀️ Light":"🌙 Dark"}</button><div className="pattern-controls"><button type="button" className={`pattern-button ${theme==="dark"?"pattern-dark":"pattern-light"}`} onClick={()=>togglePanel("background")} aria-expanded={patternMenu}>▦ Background</button>{patternMenu&&<div className={`pattern-menu ${theme==="dark"?"pattern-dark":"pattern-light"}`}>{[["none","Blank"],["lines","Horizontal lines"],["squares","Small squares"],["dots","Dots"],["graph","Graph paper"]].map(([id,label])=><button type="button" key={id} className={pattern===id?"selected":""} onClick={()=>choosePattern(id)}>{label}</button>)}</div>}</div>
+      <button className="performance-toggle" type="button" title="Reduce visual effects" aria-pressed={lightMode} onClick={()=>{setLightMode(value=>{try{localStorage.setItem("whiteboard-performance",value?"full":"light")}catch{}return !value})}}>{lightMode?"⚡ أداء خفيف":"أداء عادي"}</button>
+      <aside id="workspace-tools-menu" className="workspace-toolbar" aria-label="Board tools" aria-hidden={!toolsOpen} inert={!toolsOpen||!sync.ready}><div className="music-controls"><button type="button" aria-expanded={musicOpen} onClick={()=>togglePanel("music")}>♫ Music</button>{musicOpen&&<section aria-label="Add music" className={"music-panel music-panel-"+theme}><button className="panel-close" type="button" onClick={()=>setMusicOpen(false)} aria-label="Close music">×</button><form onSubmit={searchMusic}><input aria-label="Song name or link" placeholder="Song name or YouTube / Spotify URL" value={musicInput} onChange={e=>setMusicInput(e.target.value)}/><button type="submit" disabled={musicBusy}>{musicBusy?"Searching…":"Search / Add"}</button></form>{musicError&&<small role="alert">{musicError}</small>}<div className="music-results">{musicResults.map(item=><div key={item.id} className="music-result">{item.thumbnail&&<img src={item.thumbnail} alt=""/>}<div><strong>{item.title}</strong><small>{item.channel}</small><div className="music-add-options"><button type="button" onClick={()=>addMusicCard("https://www.youtube.com/watch?v="+item.id,item.title,"audio",item.thumbnail,item.channel)}>Add audio</button><button type="button" onClick={()=>addMusicCard("https://www.youtube.com/watch?v="+item.id,item.title,"video",item.thumbnail,item.channel)}>Add video</button></div></div></div>)}</div><small>Choose Audio for a compact song card, or Video for the YouTube player. Some videos restrict embedding.</small></section>}</div><div className="voice-controls"><button type="button" disabled={voiceBusy} onClick={recording?stopVoice:startVoice}>{voiceBusy?"Saving…":recording?"■ Stop voice":"🎙 Voice note"}</button>{recording&&<button type="button" className="voice-cancel-recording" onClick={cancelVoice} title="Discard this recording without saving" aria-label="Discard voice recording">🗑 Cancel</button>}{recording&&<span className="voice-live">● Recording</span>}</div><button type="button" className={`theme-toggle ${theme==="dark"?"theme-toggle--dark":"theme-toggle--light"}`} title="Change theme" onClick={toggleTheme} aria-label="Toggle dark mode">{theme==="dark"?"☀️ Light":"🌙 Dark"}</button><div className="pattern-controls"><button type="button" className={`pattern-button ${theme==="dark"?"pattern-dark":"pattern-light"}`} onClick={()=>togglePanel("background")} aria-expanded={patternMenu}>▦ Background</button>{patternMenu&&<div className={`pattern-menu ${theme==="dark"?"pattern-dark":"pattern-light"}`}>{[["none","Blank"],["lines","Horizontal lines"],["squares","Small squares"],["dots","Dots"],["graph","Graph paper"]].map(([id,label])=><button type="button" key={id} className={pattern===id?"selected":""} onClick={()=>choosePattern(id)}>{label}</button>)}</div>}</div>
     <>
     <button type="button" className="doodle-panel-trigger" onClick={()=>togglePanel("stickers")} aria-expanded={stickerMenu}>♡ Stickers</button>
     {stickerMenu&&<section className={`sticker-library-inline doodle-panel ${theme==="dark"?"pattern-dark":"pattern-light"}`}>
@@ -1165,9 +1119,10 @@ function App() {
         <div className="sticker-tabs">{[["saved","Saved"],["favorites","♡ Favorites"],["packs","Doodles"],["search","Search"]].map(([id,label])=><button type="button" key={id} className={stickerTab===id?"active":""} onClick={()=>setStickerTab(id)}>{label}</button>)}</div>
         {stickerTab==="saved"&&<>
           <label className="sticker-upload">＋ Upload PNG / JPG / WebP / GIF<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple onChange={uploadSticker} hidden/></label>
-          <div className="sticker-grid">{stickers.map(sticker=><div className="sticker-tile" key={sticker.id}><button type="button" title={sticker.name} onClick={()=>placeSticker(sticker)}><img src={sticker.url} alt={sticker.name}/></button><button type="button" className="favorite-action" aria-label="Toggle favorite" onClick={()=>toggleFavorite(sticker.id)}>{favoriteIds.includes(sticker.id)?"♥":"♡"}</button></div>)}</div>
+          <div className="sticker-grid">{stickers.slice(0,savedPage*48).map(sticker=><div className="sticker-tile" key={sticker.id}><button type="button" title={sticker.name} onClick={()=>placeSticker(sticker)}><StickerThumbnail sticker={sticker}/></button><button type="button" className="favorite-action" aria-label="Toggle favorite" onClick={()=>toggleFavorite(sticker.id)}>{favoriteIds.includes(sticker.id)?"♥":"♡"}</button></div>)}</div>
         </>}
-        {stickerTab==="favorites"&&<div className="sticker-grid">{stickers.filter(s=>favoriteIds.includes(s.id)).map(sticker=><div className="sticker-tile" key={sticker.id}><button type="button" onClick={()=>placeSticker(sticker)}><img src={sticker.url} alt={sticker.name}/></button><button type="button" className="favorite-action" onClick={()=>toggleFavorite(sticker.id)} aria-label="Remove favorite">♥</button></div>)}</div>}
+        {["saved","favorites"].includes(stickerTab)&&(stickers.length>savedPage*48||stickerCursor)&&<button type="button" disabled={stickerLoading} onClick={()=>{setSavedPage(p=>p+1);if(stickerCursor)loadStickers(true)}}>عرض المزيد</button>}
+        {stickerTab==="favorites"&&<div className="sticker-grid">{stickers.filter(s=>favoriteIds.includes(s.id)).slice(0,savedPage*48).map(sticker=><div className="sticker-tile" key={sticker.id}><button type="button" onClick={()=>placeSticker(sticker)}><StickerThumbnail sticker={sticker}/></button><button type="button" className="favorite-action" onClick={()=>toggleFavorite(sticker.id)} aria-label="Remove favorite">♥</button></div>)}</div>}
         {stickerTab==="packs"&&<div className="doodle-library">
           {!selectedPack?<div className="doodle-folders">{STICKER_PACKS.map(pack=><button type="button" key={pack.id} onClick={()=>setSelectedPack(pack)}><span>📁 {pack.name}</span><small>{pack.description}</small></button>)}</div>:<>
             <button type="button" className="doodle-back" onClick={()=>setSelectedPack(null)}>← Folders</button>
@@ -1185,7 +1140,7 @@ function App() {
             {searchSource==="giphy"&&<select aria-label="Search type" value={searchKind} onChange={e=>setSearchKind(e.target.value)}><option value="stickers">Stickers</option><option value="gif">GIFs</option></select>}
             <button type="submit" disabled={searchBusy}>{searchBusy?"…":"Search"}</button>
           </form>
-          <div className="sticker-grid">{searchItems.map(item=><div className="sticker-tile" key={item.id}><button type="button" title={"Save and add "+item.title} onClick={()=>importSticker(item)}><img src={item.preview} alt={item.title}/></button><button type="button" className="favorite-action" title="Save to favorites" onClick={()=>importSticker(item,true)}>♡</button></div>)}</div>
+          <div className="sticker-grid">{searchItems.map(item=><div className="sticker-tile" key={item.id}><button type="button" title={"Save and add "+item.title} onClick={()=>importSticker(item)}><img loading="lazy" decoding="async" src={item.preview} alt={item.title}/></button><button type="button" className="favorite-action" title="Save to favorites" onClick={()=>importSticker(item,true)}>♡</button></div>)}</div>
           <small>GIFs by GIPHY · Images from Wikimedia Commons (check individual licenses)</small>
         </>}
         {stickerError&&<small role="alert">{stickerError}</small>}
@@ -1209,23 +1164,11 @@ function App() {
       </form>
     </div>}
 </SelectionControls>}
-    <div className={`board ${selectedVoiceId?"board-voice-selected":""} ${selectionLocked?"board-locked-selected":""} ${selectedBoardIds.length===1?"board-single-selected":""} ${selectedBoardIds.length>1?"board-multi-selected":""} ${penActive?"board-pen-active":""}`}>
+    <div ref={boardRoot} className={`board ${selectedVoiceId?"board-voice-selected":""} ${selectionLocked?"board-locked-selected":""} ${selectedBoardIds.length===1?"board-single-selected":""} ${selectedBoardIds.length>1?"board-multi-selected":""} ${penActive?"board-pen-active":""}`}>
     <ImageDrawingControl image={selectedBoardIds.length===1?sceneImages.find(e=>e.id===selectedBoardIds[0]):null} onToggle={toggleImageDrawing}/>
-    <Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} initialData={{appState:{viewBackgroundColor:"transparent"}}} name="Our Whiteboard" />
-    <div className="voice-overlay">{voiceCards.map(e=><VoiceNoteCard key={e.id} element={e} theme={theme} viewport={viewport}/>)}</div><div className="music-overlay">{musicCards.map(e=><MusicCard key={e.id} element={e} theme={theme} viewport={viewport}/>)}</div>
-    <div className="animated-stickers" aria-hidden="true">{sceneImages.filter(e=>String(e.fileId).endsWith(".gif")||(theme==="dark"&&imageSources[e.fileId])).map(e=>{
-      const isGif=String(e.fileId).endsWith(".gif");
-      const id=isGif?e.fileId.slice(8):null;
-      const scale=e.scale||[1,1];
-      return <img key={e.id} data-sticker-element={e.id} src={isGif?"/api/sticker-file?id="+encodeURIComponent(id):imageSources[e.fileId]} alt="" draggable="false" style={{
-        position:"absolute",left:(e.x+viewport.x)*viewport.zoom,top:(e.y+viewport.y)*viewport.zoom,
-        width:e.width*viewport.zoom,height:e.height*viewport.zoom,objectFit:"fill",filter:"none",
-        borderRadius:e.roundness?.type?Math.min(32,e.width/4,e.height/4)*viewport.zoom:0,
-        transform:`rotate(${e.angle||0}rad) scale(${scale[0]},${scale[1]})`,opacity:(e.opacity??100)/100
-      }}/>;
-    })}</div>
-
-    <ImageInkOverlay images={sceneImages.filter(e=>e.customData?.drawingLayer&&(String(e.fileId).endsWith(".gif")||(theme==="dark"&&imageSources[e.fileId])))} strokes={inkStrokes} viewport={viewport}/>
+    <Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} viewModeEnabled={!sync.ready} initialData={{appState:{viewBackgroundColor:"transparent"}}} name="Our Whiteboard" />
+    <MediaLayers voices={voiceCards} musics={musicCards} images={sceneImages} sources={imageSources} theme={theme} viewport={viewport} lightMode={lightMode}/>
+    <ImageInkOverlay images={sceneImages.filter(e=>e.customData?.drawingLayer&&(String(e.fileId).endsWith(".gif")||(theme==="dark"&&imageSources[e.fileId]))&&isVisible(e,viewport,innerWidth,innerHeight))} strokes={inkStrokes} viewport={viewport}/>
     {pattern !== "none" && <div className={`board-pattern pattern-${pattern} pattern-${theme}`} aria-hidden="true" style={{
       "--pattern-size": `${(pattern === "graph" ? 10 : 20) * viewport.zoom}px`,
       "--pattern-x": `${viewport.x * viewport.zoom}px`,

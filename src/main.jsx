@@ -12,7 +12,7 @@ import { isVisible } from "./viewport";
 import { useBoardSync } from "./useBoardSync";
 import { StickerThumbnail } from "./StickerThumbnail";
 import { thumbnail } from "./thumbnails";
-import { storageWrite } from "./boardStorage";
+import { storageRead, storageWrite } from "./boardStorage";
 import { segmentHitsImage } from "./imageDrawing";
 
 function SelectionControls({count,locked,customPalette,children}){
@@ -133,6 +133,8 @@ function App() {
   const imageInFlight=useRef(new Set());
   const imageReadQueue=useRef(new Map());
   const imageReadActive=useRef(0);
+  const imageReadRetries=useRef(new Map());
+  const imageReadMissing=useRef(new Set());
   const sceneCache=useRef(null);
   const elementViews=useRef(new Map());
   const blockedImages=useRef([]);
@@ -600,10 +602,24 @@ function App() {
     loadStickers();
   }
   async function restoreBoardImage(fileId){
-    if(!fileId||String(fileId).startsWith("sticker:")||apiRef.current?.getFiles()?.[fileId])return;
+    if(!fileId||String(fileId).startsWith("sticker:"))return;
     if(imageLoads.current.has(fileId))return imageLoads.current.get(fileId);
     const task=(async()=>{
       const response=await fetch("/api/board-image?id="+encodeURIComponent(fileId),{signal:AbortSignal.timeout(30000)});
+      if(response.status===404){
+        let local=apiRef.current?.getFiles()?.[fileId];
+        if(!local?.dataURL)local=(await storageRead("images")).find(image=>image.id===fileId);
+        if(local?.dataURL){
+          const record={...local,id:fileId};
+          apiRef.current?.addFiles([record]);
+          imageUploads.current.delete(fileId);
+          imageQueue.current.set(fileId,record);
+          storageWrite("images",[record]).catch(()=>setImageStatus("تعذّر حفظ الصورة محليًا؛ سنحاول رفعها تلقائيًا"));
+          pumpImageUploads();
+          return;
+        }
+        const error=Error("Saved image is missing");error.status=404;throw error;
+      }
       if(!response.ok)throw Error("Saved image unavailable");
       const blob=await response.blob();
       const dataURL=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(blob)});
@@ -616,9 +632,13 @@ function App() {
   function queueSceneImages(elements){
     for(const e of elements){
       if(e.isDeleted||e.type!=="image"||!e.fileId)continue;
-      // A remote image may have a locally queued replacement; don't discard it.
-      if(!String(e.fileId).startsWith("sticker:")&&!imageQueue.current.has(e.fileId))imageUploads.current.add(e.fileId);
-      if(!apiRef.current?.getFiles()?.[e.fileId])imageReadQueue.current.set(e.fileId,e);
+      const id=e.fileId;
+      if(String(id).startsWith("sticker:")){
+        if(!apiRef.current?.getFiles()?.[id])imageReadQueue.current.set(id,e);
+      }else if(!imageUploads.current.has(id)&&!imageReadMissing.current.has(id)&&!imageQueue.current.has(id)&&!imageInFlight.current.has(id)){
+        // Confirm the remote blob exists before treating the scene reference as healthy.
+        if(!imageReadQueue.current.has(id))imageReadQueue.current.set(id,e);
+      }
     }
     pumpImageReads();
   }
@@ -629,7 +649,15 @@ function App() {
     while(imageReadActive.current<3&&sorted.length){
       const [id]=sorted.shift();imageReadQueue.current.delete(id);imageReadActive.current++;
       const task=String(id).startsWith("sticker:")?loadImageFile(id):restoreBoardImage(id);
-      task.catch(()=>setImageStatus("بعض الصور لم تُحمّل؛ أعد المحاولة من زر الصور")).finally(()=>{imageReadActive.current--;pumpImageReads()});
+      task.then(()=>{imageReadRetries.current.delete(id);if(!imageQueue.current.size)setImageStatus("")}).catch(error=>{
+        if(error.status!==404){
+          const retries=imageReadRetries.current.get(id)||0;
+          if(retries<2){
+            imageReadRetries.current.set(id,retries+1);
+            setTimeout(()=>{if(!apiRef.current?.getFiles()?.[id]&&!imageUploads.current.has(id)){imageReadQueue.current.set(id,apiRef.current?.getSceneElements()?.find(element=>element.fileId===id)||{fileId:id});pumpImageReads()}},800*(retries+1));
+          }else setImageStatus("تعذّر تحميل بعض الصور؛ سنحاول تلقائيًا عند عودة الاتصال");
+        }else {imageReadMissing.current.add(id);setImageStatus("بعض الصور غير متوفرة على التخزين ولا توجد لها نسخة محلية")}
+      }).finally(()=>{imageReadActive.current--;pumpImageReads()});
     }
   }
   function persistBoardImages(elements,files){
@@ -1104,7 +1132,7 @@ function App() {
 
   if (!authorized) return <form className="login" onSubmit={login}><h1>Our Whiteboard ♡</h1><p>Enter our 6-digit code</p><input aria-label="6-digit code" type="password" inputMode="numeric" autoComplete="off" maxLength={6} pattern="[0-9]{6}" required value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ""))}/><button type="submit">Open board</button><p role="alert">{loginError}</p></form>;
   return <main className={`workspace workspace-${theme} ${lightMode?"performance-light":""}`}>
-    <div className="save-indicator" role="status" aria-live="polite"><span>{status}</span>{imageStatus&&<span>{imageStatus} <button type="button" onClick={()=>{queueSceneImages(apiRef.current?.getSceneElements()||[]);pumpImageUploads()}}>إعادة محاولة الصور</button></span>}{sync.storageError&&<span>الحفظ المحلي غير متاح؛ لا تغلق الصفحة قبل الحفظ</span>}{sync.conflicts.length>0&&<span>تعارضت {sync.conflicts.length} تعديلات؛ احتفظنا بنسختك. <button type="button" onClick={sync.restoreConflicts}>استبدالها بنسختي</button></span>}</div>
+    <div className="save-indicator" role="status" aria-live="polite"><span>{status}</span>{imageStatus&&<span>{imageStatus}</span>}{sync.storageError&&<span>الحفظ المحلي غير متاح؛ لا تغلق الصفحة قبل الحفظ</span>}{sync.conflicts.length>0&&<span>تعارضت {sync.conflicts.length} تعديلات؛ احتفظنا بنسختك. <button type="button" onClick={sync.restoreConflicts}>استبدالها بنسختي</button></span>}</div>
     <div className={`workspace-toolbox ${toolsOpen?"is-open":""}`}>
       <button type="button" className="workspace-toolbox-trigger" onClick={()=>{if(toolsOpen)closePanels();setToolsOpen(open=>!open)}} aria-expanded={toolsOpen} aria-controls="workspace-tools-menu" disabled={!sync.ready} aria-label={toolsOpen?"Close tools menu":"Open tools menu"}>
         <span aria-hidden="true">{toolsOpen?"×":"☰"}</span><span className="workspace-toolbox-label">{toolsOpen?"Close":"Tools"}</span>

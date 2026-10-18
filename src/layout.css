@@ -395,11 +395,8 @@
 .board .media-world{overflow:visible;pointer-events:none;transform-origin:0 0}
 .save-indicator{position:fixed;bottom:8px;right:10px;z-index:140;max-width:min(350px,calc(100vw - 150px));display:flex;flex-direction:column;gap:4px;padding:5px 9px;border-radius:8px;background:var(--panel-bg,#fff);color:var(--panel-text,#333);font:12px system-ui;direction:rtl;box-shadow:0 1px 5px #0002;pointer-events:auto}
 .save-indicator button{font:inherit;border:1px solid #8885;border-radius:5px;cursor:pointer}
-.performance-toggle{font:12px system-ui;border:1px solid #8885;border-radius:9px;padding:6px 9px;background:var(--panel-bg,#fff);color:var(--panel-text,#333)}
-.performance-light .music-glass-card,.board-interacting .music-glass-card{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:0 1px 3px #0002!important}
-.performance-light .workspace-toolbar{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.board-interacting .music-glass-card{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:0 1px 3px #0002!important}
 @media(max-width:600px){.save-indicator{font-size:10px;max-width:calc(100vw - 150px)}}
-.performance-toggle{pointer-events:auto;cursor:pointer}
 .music-video-mount{flex:1;min-height:0;width:100%;display:flex}
 .music-video-mount iframe{height:100%;width:100%}
 @media(max-width:600px){.save-indicator{bottom:calc(52px + env(safe-area-inset-bottom));max-width:calc(100vw - 24px)}}

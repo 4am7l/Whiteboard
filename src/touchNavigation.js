@@ -3,6 +3,22 @@ export function installDrawingPinch(board, api) {
   const fingers = new Map();
   const pens = new Set();
   let first = null, pinch = null, navigating = false, forwarding = false;
+  let navigationFrame = 0, pendingNavigation = null;
+  const cancelNavigation = () => {
+    if (navigationFrame) cancelAnimationFrame(navigationFrame);
+    navigationFrame = 0;
+    pendingNavigation = null;
+  };
+  const queueNavigation = appState => {
+    pendingNavigation = appState;
+    if (navigationFrame) return;
+    navigationFrame = requestAnimationFrame(() => {
+      navigationFrame = 0;
+      const latest = pendingNavigation;
+      pendingNavigation = null;
+      if (latest && navigating) api.updateScene({appState:latest});
+    });
+  };
   const stop = e => { e.preventDefault(); e.stopImmediatePropagation(); };
   const position = e => ({x:e.clientX,y:e.clientY});
   const pair = () => {
@@ -51,17 +67,17 @@ export function installDrawingPinch(board, api) {
     if(!pinch || fingers.size<2)return;
     const center=pair(),rect=board.getBoundingClientRect();
     const zoom=Math.max(.1,Math.min(30,pinch.zoom*center.distance/pinch.distance));
-    api.updateScene({appState:{zoom:{value:zoom},scrollX:(center.x-rect.left)/zoom-pinch.worldX,scrollY:(center.y-rect.top)/zoom-pinch.worldY}});
+    queueNavigation({zoom:{value:zoom},scrollX:(center.x-rect.left)/zoom-pinch.worldX,scrollY:(center.y-rect.top)/zoom-pinch.worldY});
   };
   const up = e => {
     if(e.pointerType==='pen'){pens.delete(e.pointerId);return;}
     if(forwarding || !fingers.has(e.pointerId))return;
     fingers.delete(e.pointerId);
     if(navigating)stop(e);
-    if(!fingers.size){first=null;pinch=null;navigating=false;}
+    if(!fingers.size){cancelNavigation();first=null;pinch=null;navigating=false;}
     else if(navigating)baseline();
   };
-  const reset = () => {pens.clear();fingers.clear();first=null;pinch=null;navigating=false;};
+  const reset = () => {cancelNavigation();pens.clear();fingers.clear();first=null;pinch=null;navigating=false;};
   window.addEventListener('pointerdown',down,{capture:true,passive:false});
   window.addEventListener('pointermove',move,{capture:true,passive:false});
   window.addEventListener('pointerup',up,true);

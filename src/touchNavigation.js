@@ -74,7 +74,16 @@ export function installDrawingPinch(board, api) {
     if(forwarding || !fingers.has(e.pointerId))return;
     fingers.delete(e.pointerId);
     if(navigating)stop(e);
-    if(!fingers.size){cancelNavigation();first=null;pinch=null;navigating=false;}
+    if(!fingers.size){
+      // Commit the last pinch position before ending the gesture; otherwise a
+      // quick lift can discard the final queued camera update.
+      if(navigationFrame && pendingNavigation){
+        const finalState=pendingNavigation;
+        cancelNavigation();
+        api.updateScene({appState:finalState});
+      } else cancelNavigation();
+      first=null;pinch=null;navigating=false;
+    }
     else if(navigating)baseline();
   };
   const reset = () => {cancelNavigation();pens.clear();fingers.clear();first=null;pinch=null;navigating=false;};

@@ -110,19 +110,11 @@ export function useBoardSync(options) {
           const sentDraft = batch.find(element => element.id === remote.id);
           const currentDraft = pending.current.get(remote.id);
           if (!sentDraft || !currentDraft) continue;
-          // A newer local edit may have arrived while this request was in flight.
-          // Do not label that unsent edit as a conflict or overwrite it with
-          // the server's older response. Rebase and retry it on the next push.
-          if (!isSameEdit(currentDraft, sentDraft)) {
-            if (currentDraft.version <= remote.version) {
-              const rebased = { ...currentDraft, version: remote.version + 1,
-                versionNonce: Math.floor(Math.random() * 2147483647), updated: Date.now() };
-              pending.current.set(remote.id, rebased);
-              enqueue('pending', [structuredClone(rebased)]).catch(() => {});
-            }
-            continue;
-          }
-          const draft = structuredClone(sentDraft);
+          // If the user edited the same element while the request was in flight,
+          // preserve the latest draft rather than the older sent snapshot.
+          // This is still a real same-element conflict: never silently overwrite
+          // the remote edit by automatically raising the local version.
+          const draft = structuredClone(currentDraft);
           // Keep a recoverable draft before adopting the server's canonical edit.
           // If persistence fails, leave it pending rather than discard the edit.
           const recovery = { id: draft.id, element: structuredClone(draft), savedAt: Date.now() };

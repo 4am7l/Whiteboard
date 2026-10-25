@@ -11,11 +11,13 @@ export const MediaLayers = memo(function MediaLayers({voices,musics,images,sourc
   const playback=useMemo(()=>({get:id=>positions.current.get(id)||0,set:(id,time)=>positions.current.set(id,time)}),[]);
   const [playing,setPlaying] = useState(new Set());
   const onPlayback=useCallback((id,value)=>setPlaying(old=>{if(old.has(id)===value)return old;const next=new Set(old);value?next.add(id):next.delete(id);return next}),[]);
-  const visible=e=>isVisible(e,viewport,innerWidth,innerHeight);
-  const keep=e=>visible(e)||playing.has(e.id);
+  const visible=useCallback(e=>isVisible(e,viewport,innerWidth,innerHeight),[viewport]);
+  const visibleVoices=useMemo(()=>voices.filter(e=>visible(e)||playing.has(e.id)),[voices,visible,playing]);
+  const visibleMusics=useMemo(()=>musics.filter(e=>visible(e)||playing.has(e.id)),[musics,visible,playing]);
+  const visibleImages=useMemo(()=>images.filter(e=>visible(e)&&(String(e.fileId).endsWith('.gif')||(theme==='dark'&&sources[e.fileId]))),[images,visible,theme,sources]);
   return <>
-    <div className="voice-overlay media-world">{voices.filter(keep).map(e=><VoiceNoteCard key={e.id} element={e} theme={theme} viewport={WORLD_VIEW} onPlayback={onPlayback} playback={playback}/>)}</div>
-    <div className="music-overlay media-world">{musics.filter(keep).map(e=><MusicCard key={e.id} element={e} theme={theme} viewport={WORLD_VIEW} onPlayback={onPlayback} playback={playback}/>)}</div>
-    <div className="animated-stickers media-world" aria-hidden="true">{images.filter(e=>visible(e)&&(String(e.fileId).endsWith('.gif')||(theme==='dark'&&sources[e.fileId]))).map(e=><ImageLayer key={e.id} element={e} source={String(e.fileId).endsWith('.gif')?'/api/sticker-file?id='+encodeURIComponent(e.fileId.slice(8)):sources[e.fileId]}/>)}</div>
+    <div className="voice-overlay media-world">{visibleVoices.map(e=><VoiceNoteCard key={e.id} element={e} theme={theme} viewport={WORLD_VIEW} onPlayback={onPlayback} playback={playback}/>)}</div>
+    <div className="music-overlay media-world">{visibleMusics.map(e=><MusicCard key={e.id} element={e} theme={theme} viewport={WORLD_VIEW} onPlayback={onPlayback} playback={playback}/>)}</div>
+    <div className="animated-stickers media-world" aria-hidden="true">{visibleImages.map(e=><ImageLayer key={e.id} element={e} source={String(e.fileId).endsWith('.gif')?'/api/sticker-file?id='+encodeURIComponent(e.fileId.slice(8)):sources[e.fileId]}/>)}</div>
   </>;
 });

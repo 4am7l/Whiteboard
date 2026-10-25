@@ -107,9 +107,22 @@ export function useBoardSync(options) {
         }
         if(remove.length)enqueue("pending",[],remove).catch(()=>{});
         for (const remote of data.conflicts) {
+          const sentDraft = batch.find(element => element.id === remote.id);
           const currentDraft = pending.current.get(remote.id);
-          const draft = currentDraft ? structuredClone(currentDraft) : null;
-          if (!draft) continue;
+          if (!sentDraft || !currentDraft) continue;
+          // A newer local edit may have arrived while this request was in flight.
+          // Do not label that unsent edit as a conflict or overwrite it with
+          // the server's older response. Rebase and retry it on the next push.
+          if (!isSameEdit(currentDraft, sentDraft)) {
+            if (currentDraft.version <= remote.version) {
+              const rebased = { ...currentDraft, version: remote.version + 1,
+                versionNonce: Math.floor(Math.random() * 2147483647), updated: Date.now() };
+              pending.current.set(remote.id, rebased);
+              enqueue('pending', [structuredClone(rebased)]).catch(() => {});
+            }
+            continue;
+          }
+          const draft = structuredClone(sentDraft);
           // Keep a recoverable draft before adopting the server's canonical edit.
           // If persistence fails, leave it pending rather than discard the edit.
           const recovery = { id: draft.id, element: structuredClone(draft), savedAt: Date.now() };

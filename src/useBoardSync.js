@@ -6,6 +6,7 @@ export function useBoardSync(options) {
   const latest = useRef(options); latest.current = options;
   const localTimer=useRef(null);
   const seen = useRef(new Map()), writes = useRef(Promise.resolve());
+  const lastSent = useRef(new Map());
   const [ready, setReady] = useState(false), [conflicts, setConflicts] = useState([]);
   const [storageError, setStorageError] = useState(false);
   const enqueue = useCallback((name, values, remove) => {
@@ -93,6 +94,7 @@ export function useBoardSync(options) {
       try {
         if (!loaded.current || !pending.current.size) return;
         const batch = structuredClone(makeBatch(pending.current));
+        batch.forEach(e => lastSent.current.set(e.id, e));
         // Commit recovery before sending. Remote saving still works if IDB is unavailable.
         await enqueue('pending', structuredClone(batch)).catch(() => {});
         if (!active) return;
@@ -105,24 +107,32 @@ export function useBoardSync(options) {
         for (const ack of data.accepted) {
           if (isSameEdit(pending.current.get(ack.id), ack)) { pending.current.delete(ack.id); remove.push(ack.id); }
         }
-        if(remove.length)enqueue("pending",[],remove).catch(()=>{});
+        if(remove.length)await enqueue("pending",[],remove);
         for (const remote of data.conflicts) {
-          const sentDraft = batch.find(element => element.id === remote.id);
-          const currentDraft = pending.current.get(remote.id);
-          if (!sentDraft || !currentDraft) continue;
-          // If the user edited the same element while the request was in flight,
-          // preserve the latest draft rather than the older sent snapshot.
-          // This is still a real same-element conflict: never silently overwrite
-          // the remote edit by automatically raising the local version.
-          const draft = structuredClone(currentDraft);
-          // Keep a recoverable draft before adopting the server's canonical edit.
-          // If persistence fails, leave it pending rather than discard the edit.
-          const recovery = { id: draft.id, element: structuredClone(draft), savedAt: Date.now() };
-          await enqueue('conflicts', [recovery]);
-          if (!active) return;
-          setConflicts(old => [...old.filter(item => item.id !== recovery.id), recovery]);
-          if (isSameEdit(pending.current.get(draft.id), draft)) {
-            pending.current.delete(draft.id); enqueue("pending",[],[draft.id]).catch(()=>{}); canonical.push(remote);
+          const sent = lastSent.current.get(remote.id);
+          const current = pending.current.get(remote.id);
+          if (!sent || !current) continue;
+          // Resolve same-element races by the actual edit timestamp, not by
+          // arrival order or the Excalidraw version counter. Equal timestamps
+          // are deterministically broken by nonce so clients converge.
+          const newer = (a, b) => (a.updated || 0) > (b.updated || 0) ||
+            ((a.updated || 0) === (b.updated || 0) && a.versionNonce > b.versionNonce);
+          if (newer(current, remote)) {
+            const rebased = { ...current, version: Math.max(current.version, remote.version) + 1 };
+            pending.current.set(remote.id, rebased);
+            await enqueue('pending', [structuredClone(rebased)]);
+          } else {
+            // The remote edit is newer. Preserve the losing local version in
+            // recovery storage, then converge to the server's canonical edit.
+            const recovery = { id: current.id, element: structuredClone(current), savedAt: Date.now() };
+            await enqueue('conflicts', [recovery]);
+            if (!active) return;
+            if (isSameEdit(pending.current.get(current.id), current)) {
+              pending.current.delete(current.id);
+              await enqueue('pending', [], [current.id]);
+              canonical.push(remote);
+            }
+            // Do not display a conflict notice for automatically resolved edits.
           }
         }
         // Queue deletes before yielding, so a later edit always writes after them.

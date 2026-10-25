@@ -158,6 +158,9 @@ function App() {
   const [selectedBoardIds,setSelectedBoardIds]=useState([]);
   const [inkStrokes,setInkStrokes]=useState([]);
   const [penActive,setPenActive]=useState(false);
+  // iPadOS may identify itself as desktop Safari; detect touch capability instead.
+  const [startWithHand]=useState(()=>navigator.maxTouchPoints>0);
+  const [handActive,setHandActive]=useState(()=>navigator.maxTouchPoints>0);
   const [selectionLocked,setSelectionLocked]=useState(false);
   const lockedSnapshot=useRef(new Map());
   const lastSelection=useRef({});
@@ -1094,6 +1097,7 @@ function App() {
       setImageSources(old=>Object.keys(old).length===Object.keys(sources).length&&Object.keys(sources).every(id=>old[id]===sources[id])?old:sources);
     }
     if (appState && (changed || lastSelection.current!==appState.selectedElementIds || sceneCache.current?.tool!==appState.activeTool?.type)) {
+      setHandActive(appState.activeTool?.type==="hand");
       const isPen=appState.activeTool?.type==="freedraw";
       setPenActive(old=>old===isPen?old:isPen);
       const selectedIds=Object.keys(appState.selectedElementIds||{}).filter(id=>appState.selectedElementIds[id]);
@@ -1175,6 +1179,12 @@ function App() {
     </>
 </aside>
     </div>
+    <button type="button" className="board-navigation-toggle" disabled={!sync.ready||!api}
+      aria-pressed={handActive} title="بدّل بين تحريك اللوحة وتحديد العناصر"
+      onClick={()=>{
+        api.updateScene({appState:{selectedElementIds:{},selectedGroupIds:{},editingTextElement:null}});
+        api.setActiveTool({type:handActive?"selection":"hand"});
+      }}>{handActive?"✋ تحريك اللوحة · اضغط للتعديل":"↖ تحديد وتعديل · اضغط للتحريك"}</button>
     <button type="button" className="board-logout-bottom" onClick={logout} title="Return to password screen" aria-label="Log out">Log out</button>
     {stickerError&&<div className="sticker-global-error" role="alert">{stickerError}<button type="button" onClick={()=>setStickerError("")}>×</button></div>}
     {selectedBoardIds.length>0&&<SelectionControls count={selectedBoardIds.length} locked={selectionLocked} customPalette={Boolean(selectedVoiceId||selectedMusicId)}><button type="button" className="selection-lock" onClick={toggleSelectedLock} aria-label={selectionLocked?"Unlock selected items":"Lock selected items"}>{selectionLocked?"Unlock":"Lock"}{selectedBoardIds.length>1?` (${selectedBoardIds.length})`:""}</button>{selectionLocked&&selectedBoardIds.length===1&&<span className="locked-selection-hint">Locked · selection only</span>}{selectedBoardIds.length===1&&selectedVoiceId&&!selectionLocked&&<div className={`voice-palette voice-palette-${theme}`} aria-label="Voice note appearance"><span>Voice color</span><button type="button" className="media-responsive-toggle" aria-pressed={mediaResponsive} onClick={toggleMediaResponsive}>{mediaResponsive?"✓ Responsive layout":"Responsive layout"}</button><div className="voice-palette-swatches">{[["default","Auto"],["violet","Purple"],["blue","Blue"],["rose","Pink"],["mint","Mint"]].map(([value,label])=><button key={value} type="button" className={"voice-swatch voice-swatch-"+value} title={label} aria-label={label} onClick={()=>{setVoiceHex("");setVoiceColor(value)}}>{value==="default"?"◐":""}</button>)}</div><label className="voice-custom-picker" title="Pick a custom color">✎ <input aria-label="Pick any color" type="color" value={/^#[0-9a-fA-F]{6}$/.test(voiceHex)?voiceHex:"#9274db"} onChange={e=>{setVoiceHex(e.target.value);setVoiceColor(e.target.value)}}/></label><form className="voice-hex-form" onSubmit={e=>{e.preventDefault();if(/^#[0-9a-fA-F]{6}$/.test(voiceHex))setVoiceColor(voiceHex)}}><input aria-label="Hex color" placeholder="#9274DB" maxLength={7} value={voiceHex} onChange={e=>setVoiceHex(e.target.value)} /><button type="submit" disabled={!/^#[0-9a-fA-F]{6}$/.test(voiceHex)}>Apply</button></form></div>}
@@ -1190,9 +1200,9 @@ function App() {
       </form>
     </div>}
 </SelectionControls>}
-    <div ref={boardRoot} className={`board ${selectedVoiceId?"board-voice-selected":""} ${selectionLocked?"board-locked-selected":""} ${selectedBoardIds.length===1?"board-single-selected":""} ${selectedBoardIds.length>1?"board-multi-selected":""} ${penActive?"board-pen-active":""}`}>
+    <div ref={boardRoot} className={`board ${handActive?"board-hand-active":""} ${selectedVoiceId?"board-voice-selected":""} ${selectionLocked?"board-locked-selected":""} ${selectedBoardIds.length===1?"board-single-selected":""} ${selectedBoardIds.length>1?"board-multi-selected":""} ${penActive?"board-pen-active":""}`}>
     <ImageDrawingControl image={selectedBoardIds.length===1?sceneImages.find(e=>e.id===selectedBoardIds[0]):null} onToggle={toggleImageDrawing}/>
-    <Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} viewModeEnabled={!sync.ready} initialData={{appState:{viewBackgroundColor:"transparent"}}} name="Our Whiteboard" />
+    <Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} viewModeEnabled={!sync.ready} initialData={{appState:{viewBackgroundColor:"transparent",activeTool:{type:startWithHand?"hand":"selection"}}}} name="Our Whiteboard" />
     <MediaLayers voices={voiceCards} musics={musicCards} images={sceneImages} sources={imageSources} theme={theme} viewport={viewport}/>
     <ImageInkOverlay images={sceneImages.filter(e=>e.customData?.drawingLayer&&(String(e.fileId).endsWith(".gif")||(theme==="dark"&&imageSources[e.fileId]))&&isVisible(e,viewport,innerWidth,innerHeight))} strokes={inkStrokes} viewport={viewport}/>
     {pattern !== "none" && <div className={`board-pattern pattern-${pattern} pattern-${theme}`} aria-hidden="true" style={{

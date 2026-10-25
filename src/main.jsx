@@ -13,6 +13,7 @@ import { useBoardSync } from "./useBoardSync";
 import { StickerThumbnail } from "./StickerThumbnail";
 import { thumbnail } from "./thumbnails";
 import { storageRead, storageWrite } from "./boardStorage";
+import { installDrawingPinch, isMobileBoardDevice } from "./touchNavigation";
 import { segmentHitsImage } from "./imageDrawing";
 
 function SelectionControls({count,locked,customPalette,children}){
@@ -159,8 +160,8 @@ function App() {
   const [inkStrokes,setInkStrokes]=useState([]);
   const [penActive,setPenActive]=useState(false);
   // iPadOS may identify itself as desktop Safari; detect touch capability instead.
-  const [startWithHand]=useState(()=>navigator.maxTouchPoints>0);
-  const [handActive,setHandActive]=useState(()=>navigator.maxTouchPoints>0);
+  const [startWithHand]=useState(()=>isMobileBoardDevice(navigator));
+  const [handActive,setHandActive]=useState(()=>isMobileBoardDevice(navigator));
   const [selectionLocked,setSelectionLocked]=useState(false);
   const lockedSnapshot=useRef(new Map());
   const lastSelection=useRef({});
@@ -298,6 +299,11 @@ function App() {
       clear();
     };
   }, [api, authorized]);
+
+  useEffect(()=>{
+    if(!api||!authorized||!boardRoot.current)return;
+    return installDrawingPinch(boardRoot.current,api);
+  },[api,authorized]);
 
   useEffect(() => {
     if (!authorized || !api) return;
@@ -1179,12 +1185,12 @@ function App() {
     </>
 </aside>
     </div>
-    <button type="button" className="board-navigation-toggle" disabled={!sync.ready||!api}
-      aria-pressed={handActive} title="بدّل بين تحريك اللوحة وتحديد العناصر"
+    {startWithHand&&<button type="button" className="board-navigation-toggle" disabled={!sync.ready||!api}
+      aria-label={handActive?"التبديل إلى التحديد والتعديل":"التبديل إلى تحريك اللوحة"} aria-pressed={handActive} title="بدّل بين تحريك اللوحة وتحديد العناصر"
       onClick={()=>{
         api.updateScene({appState:{selectedElementIds:{},selectedGroupIds:{},editingTextElement:null}});
         api.setActiveTool({type:handActive?"selection":"hand"});
-      }}>{handActive?"✋ تحريك اللوحة · اضغط للتعديل":"↖ تحديد وتعديل · اضغط للتحريك"}</button>
+      }}>{handActive?"✋":"↖"}</button>}
     <button type="button" className="board-logout-bottom" onClick={logout} title="Return to password screen" aria-label="Log out">Log out</button>
     {stickerError&&<div className="sticker-global-error" role="alert">{stickerError}<button type="button" onClick={()=>setStickerError("")}>×</button></div>}
     {selectedBoardIds.length>0&&<SelectionControls count={selectedBoardIds.length} locked={selectionLocked} customPalette={Boolean(selectedVoiceId||selectedMusicId)}><button type="button" className="selection-lock" onClick={toggleSelectedLock} aria-label={selectionLocked?"Unlock selected items":"Lock selected items"}>{selectionLocked?"Unlock":"Lock"}{selectedBoardIds.length>1?` (${selectedBoardIds.length})`:""}</button>{selectionLocked&&selectedBoardIds.length===1&&<span className="locked-selection-hint">Locked · selection only</span>}{selectedBoardIds.length===1&&selectedVoiceId&&!selectionLocked&&<div className={`voice-palette voice-palette-${theme}`} aria-label="Voice note appearance"><span>Voice color</span><button type="button" className="media-responsive-toggle" aria-pressed={mediaResponsive} onClick={toggleMediaResponsive}>{mediaResponsive?"✓ Responsive layout":"Responsive layout"}</button><div className="voice-palette-swatches">{[["default","Auto"],["violet","Purple"],["blue","Blue"],["rose","Pink"],["mint","Mint"]].map(([value,label])=><button key={value} type="button" className={"voice-swatch voice-swatch-"+value} title={label} aria-label={label} onClick={()=>{setVoiceHex("");setVoiceColor(value)}}>{value==="default"?"◐":""}</button>)}</div><label className="voice-custom-picker" title="Pick a custom color">✎ <input aria-label="Pick any color" type="color" value={/^#[0-9a-fA-F]{6}$/.test(voiceHex)?voiceHex:"#9274db"} onChange={e=>{setVoiceHex(e.target.value);setVoiceColor(e.target.value)}}/></label><form className="voice-hex-form" onSubmit={e=>{e.preventDefault();if(/^#[0-9a-fA-F]{6}$/.test(voiceHex))setVoiceColor(voiceHex)}}><input aria-label="Hex color" placeholder="#9274DB" maxLength={7} value={voiceHex} onChange={e=>setVoiceHex(e.target.value)} /><button type="submit" disabled={!/^#[0-9a-fA-F]{6}$/.test(voiceHex)}>Apply</button></form></div>}

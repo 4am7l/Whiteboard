@@ -406,11 +406,11 @@
 .board.board-hand-active .media-world,
 .board.board-hand-active .media-world *{pointer-events:none!important}
 .board-navigation-toggle{
-  position:fixed;left:50%;bottom:calc(52px + env(safe-area-inset-bottom,0px));
-  transform:translateX(-50%);z-index:150;min-height:44px;max-width:calc(100vw - 24px);
-  padding:10px 16px;border:1px solid #8886;border-radius:24px;
+  position:fixed;right:12px;bottom:calc(100px + env(safe-area-inset-bottom,0px));
+  z-index:150;width:44px;height:44px;
+  padding:0;border:1px solid #8886;border-radius:50%;
   background:var(--panel-bg,#fff);color:var(--panel-text,#333);
-  box-shadow:0 2px 12px #0002;font:600 14px system-ui;direction:rtl;cursor:pointer;
+  box-shadow:0 2px 12px #0002;font:600 21px system-ui;direction:rtl;cursor:pointer;
 }
 .board-navigation-toggle[aria-pressed="true"]{border-color:#7865d9;background:#ede9ff;color:#35266f}
 .board-navigation-toggle:disabled{opacity:.5;cursor:wait}

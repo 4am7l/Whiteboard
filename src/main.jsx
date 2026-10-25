@@ -24,7 +24,7 @@ function SelectionControls({count,locked,customPalette,children}){
     const root=document.querySelector(".board .excalidraw");
     if(!root)return;
     const locate=()=>{
-      const panel=root.querySelector(".App-menu__left .panelColumn");
+      const panel=root.querySelector(".App-menu__left .panelColumn, .App-mobile-menu .panelColumn");
       setHost(panel?.getClientRects().length?panel:null);
     };
     locate();
@@ -43,7 +43,7 @@ function ImageDrawingControl({image,onToggle}){
     if(!image||image.locked)return;
     const root=document.querySelector(".board .excalidraw");
     if(!root)return;
-    const locate=()=>setHost(root.querySelector(".App-menu__left .panelColumn"));
+    const locate=()=>setHost(root.querySelector(".App-menu__left .panelColumn, .App-mobile-menu .panelColumn"));
     locate();
     const observer=new MutationObserver(locate);
     observer.observe(root,{childList:true,subtree:true});
@@ -1140,8 +1140,17 @@ function App() {
   }
 
   if (!authorized) return <form className="login" onSubmit={login}><h1>Our Whiteboard ♡</h1><p>Enter our 6-digit code</p><input aria-label="6-digit code" type="password" inputMode="numeric" autoComplete="off" maxLength={6} pattern="[0-9]{6}" required value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ""))}/><button type="submit">Open board</button><p role="alert">{loginError}</p></form>;
-  return <main className={`workspace workspace-${theme}`}>
-    <div className="save-indicator" role="status" aria-live="polite"><span>{status}</span>{imageStatus&&<span>{imageStatus}</span>}{sync.storageError&&<span>الحفظ المحلي غير متاح؛ لا تغلق الصفحة قبل الحفظ</span>}{sync.conflicts.length>0&&<span>تعارضت {sync.conflicts.length} تعديلات؛ احتفظنا بنسختك. <button type="button" onClick={sync.restoreConflicts}>استبدالها بنسختي</button></span>}</div>
+  return <main className={`workspace workspace-${theme} ${toolsOpen?"workspace-tools-open":""}`}>
+    <header className="workspace-header">
+    <div className="workspace-brand">Our Whiteboard <span aria-hidden="true">♡</span></div>
+    <div className="save-indicator" role="status" aria-live="polite" title={status}>{status}</div>
+
+    {startWithHand&&<button type="button" className="board-navigation-toggle" disabled={!sync.ready||!api}
+      aria-label={handActive?"التبديل إلى التحديد والتعديل":"التبديل إلى تحريك اللوحة"} aria-pressed={handActive} title="بدّل بين تحريك اللوحة وتحديد العناصر"
+      onClick={()=>{
+        api.updateScene({appState:{selectedElementIds:{},selectedGroupIds:{},editingTextElement:null}});
+        api.setActiveTool({type:handActive?"selection":"hand"});
+      }}><svg aria-hidden="true" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{handActive?<path d="M8 13V6a2 2 0 0 1 4 0v6-8a2 2 0 0 1 4 0v8-6a2 2 0 0 1 4 0v9c0 4-3 7-7 7-3 0-5-2-7-4l-3-4a2 2 0 0 1 3-2l2 2"/>:<path d="m5 3 14 9-7 1-3 7z"/>}</svg></button>}
     <div className={`workspace-toolbox ${toolsOpen?"is-open":""}`}>
       <button type="button" className="workspace-toolbox-trigger" onClick={()=>{if(toolsOpen)closePanels();setToolsOpen(open=>!open)}} aria-expanded={toolsOpen} aria-controls="workspace-tools-menu" disabled={!sync.ready} aria-label={toolsOpen?"Close tools menu":"Open tools menu"}>
         <span aria-hidden="true">{toolsOpen?"×":"☰"}</span><span className="workspace-toolbox-label">{toolsOpen?"Close":"Tools"}</span>
@@ -1183,16 +1192,19 @@ function App() {
       </div>
     </section>}
     </>
+    <div className="workspace-menu-footer"><button type="button" className="workspace-logout" onClick={logout}>تسجيل الخروج</button></div>
 </aside>
     </div>
-    {startWithHand&&<button type="button" className="board-navigation-toggle" disabled={!sync.ready||!api}
-      aria-label={handActive?"التبديل إلى التحديد والتعديل":"التبديل إلى تحريك اللوحة"} aria-pressed={handActive} title="بدّل بين تحريك اللوحة وتحديد العناصر"
-      onClick={()=>{
-        api.updateScene({appState:{selectedElementIds:{},selectedGroupIds:{},editingTextElement:null}});
-        api.setActiveTool({type:handActive?"selection":"hand"});
-      }}>{handActive?"✋":"↖"}</button>}
-    <button type="button" className="board-logout-bottom" onClick={logout} title="Return to password screen" aria-label="Log out">Log out</button>
-    {stickerError&&<div className="sticker-global-error" role="alert">{stickerError}<button type="button" onClick={()=>setStickerError("")}>×</button></div>}
+
+    </header>
+    {(stickerError||imageStatus||sync.storageError||sync.conflicts.length>0)&&<div className="workspace-notices" aria-live="polite">
+      {imageStatus&&<span>{imageStatus}</span>}
+      {sync.storageError&&<span role="alert">الحفظ المحلي غير متاح؛ لا تغلق الصفحة قبل الحفظ</span>}
+      {sync.conflicts.length>0&&<span>تعارضت {sync.conflicts.length} تعديلات؛ احتفظنا بنسختك. <button type="button" onClick={sync.restoreConflicts}>استبدالها بنسختي</button></span>}
+      {stickerError&&<span role="alert">{stickerError} <button type="button" onClick={()=>setStickerError("")} aria-label="إغلاق التنبيه">×</button></span>}
+    </div>}
+
+    <div ref={boardRoot} className={`board ${handActive?"board-hand-active":""} ${selectedVoiceId?"board-voice-selected":""} ${selectionLocked?"board-locked-selected":""} ${selectedBoardIds.length===1?"board-single-selected":""} ${selectedBoardIds.length>1?"board-multi-selected":""} ${penActive?"board-pen-active":""}`}>
     {selectedBoardIds.length>0&&<SelectionControls count={selectedBoardIds.length} locked={selectionLocked} customPalette={Boolean(selectedVoiceId||selectedMusicId)}><button type="button" className="selection-lock" onClick={toggleSelectedLock} aria-label={selectionLocked?"Unlock selected items":"Lock selected items"}>{selectionLocked?"Unlock":"Lock"}{selectedBoardIds.length>1?` (${selectedBoardIds.length})`:""}</button>{selectionLocked&&selectedBoardIds.length===1&&<span className="locked-selection-hint">Locked · selection only</span>}{selectedBoardIds.length===1&&selectedVoiceId&&!selectionLocked&&<div className={`voice-palette voice-palette-${theme}`} aria-label="Voice note appearance"><span>Voice color</span><button type="button" className="media-responsive-toggle" aria-pressed={mediaResponsive} onClick={toggleMediaResponsive}>{mediaResponsive?"✓ Responsive layout":"Responsive layout"}</button><div className="voice-palette-swatches">{[["default","Auto"],["violet","Purple"],["blue","Blue"],["rose","Pink"],["mint","Mint"]].map(([value,label])=><button key={value} type="button" className={"voice-swatch voice-swatch-"+value} title={label} aria-label={label} onClick={()=>{setVoiceHex("");setVoiceColor(value)}}>{value==="default"?"◐":""}</button>)}</div><label className="voice-custom-picker" title="Pick a custom color">✎ <input aria-label="Pick any color" type="color" value={/^#[0-9a-fA-F]{6}$/.test(voiceHex)?voiceHex:"#9274db"} onChange={e=>{setVoiceHex(e.target.value);setVoiceColor(e.target.value)}}/></label><form className="voice-hex-form" onSubmit={e=>{e.preventDefault();if(/^#[0-9a-fA-F]{6}$/.test(voiceHex))setVoiceColor(voiceHex)}}><input aria-label="Hex color" placeholder="#9274DB" maxLength={7} value={voiceHex} onChange={e=>setVoiceHex(e.target.value)} /><button type="submit" disabled={!/^#[0-9a-fA-F]{6}$/.test(voiceHex)}>Apply</button></form></div>}
     {selectedBoardIds.length===1&&selectedMusicId&&!selectionLocked&&<div className={`voice-palette music-palette voice-palette-${theme}`} aria-label="Music and video appearance">
       <span>Music / video color</span><button type="button" className="media-responsive-toggle" aria-pressed={mediaResponsive} onClick={toggleMediaResponsive}>{mediaResponsive?"✓ Responsive layout":"Responsive layout"}</button>
@@ -1206,7 +1218,7 @@ function App() {
       </form>
     </div>}
 </SelectionControls>}
-    <div ref={boardRoot} className={`board ${handActive?"board-hand-active":""} ${selectedVoiceId?"board-voice-selected":""} ${selectionLocked?"board-locked-selected":""} ${selectedBoardIds.length===1?"board-single-selected":""} ${selectedBoardIds.length>1?"board-multi-selected":""} ${penActive?"board-pen-active":""}`}>
+
     <ImageDrawingControl image={selectedBoardIds.length===1?sceneImages.find(e=>e.id===selectedBoardIds[0]):null} onToggle={toggleImageDrawing}/>
     <Excalidraw excalidrawAPI={setApi} onChange={onChange} theme={theme} viewModeEnabled={!sync.ready} initialData={{appState:{viewBackgroundColor:"transparent",activeTool:{type:startWithHand?"hand":"selection"}}}} name="Our Whiteboard" />
     <MediaLayers voices={voiceCards} musics={musicCards} images={sceneImages} sources={imageSources} theme={theme} viewport={viewport}/>

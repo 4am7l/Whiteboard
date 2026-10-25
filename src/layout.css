@@ -24,8 +24,7 @@
 
 /* Single floating launcher in the canvas' top-right corner. */
 .workspace-toolbox{
-  position:fixed;right:calc(12px + env(safe-area-inset-right));
-  top:calc(12px + env(safe-area-inset-top));z-index:20000;
+  position:relative;z-index:500;flex:none;
   display:flex;flex-direction:column;align-items:flex-end;gap:9px;
   pointer-events:none;
 }
@@ -43,7 +42,7 @@
 
 /* Sliding tools menu. Kept mounted so search results and inputs persist. */
 .workspace-toolbox .workspace-toolbar{
-  pointer-events:auto;position:relative!important;inset:auto!important;transform:translateY(-7px);
+  pointer-events:auto;position:absolute!important;top:calc(100% + 8px)!important;right:0!important;left:auto!important;bottom:auto!important;transform:translateY(-7px);
   display:flex!important;flex-direction:column;align-items:stretch;gap:9px;
   width:min(342px,calc(100vw - 24px));max-height:calc(100dvh - 92px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;
@@ -114,8 +113,8 @@
 /* Single-element appearance: a lock action docked to the same left-side
    area as Excalidraw's property/color controls, rather than a separate toolbar. */
 .workspace .appearance-lock-bar{
-  position:fixed;
-  top:calc(72px + env(safe-area-inset-top));
+  position:absolute;
+  top:72px;
   left:calc(14px + env(safe-area-inset-left));
   right:auto;
   bottom:auto;
@@ -126,6 +125,7 @@
   align-items:stretch;
   gap:7px;
   width:210px;
+  max-height:calc(100% - 144px);overflow-y:auto;overscroll-behavior:contain;
   max-width:calc(100vw - 28px);
   padding:9px 10px;
   border:1px solid var(--line);
@@ -181,36 +181,6 @@
 .workspace .board.board-media-selected .excalidraw .App-menu__left{
   display:none!important;
 }
-/* Two Lock controls are intentional: keep the native right-click menu Lock/Unlock
-   alongside our always-visible selection button.
-   Put the native appearance panel BELOW the top lock card, not under it. */
-.workspace .board.board-single-selected:not(.board-locked-selected):not(.board-media-selected) .excalidraw .App-menu__left{
-  position:fixed!important;
-  top:calc(151px + env(safe-area-inset-top))!important;
-  left:calc(14px + env(safe-area-inset-left))!important;
-  bottom:auto!important;
-  margin-top:0!important;
-  max-height:calc(100dvh - 175px - env(safe-area-inset-top) - env(safe-area-inset-bottom))!important;
-  overflow-y:auto;
-}
-/* The pen is not a selected element: show its native color/brush-size
-   properties near the top, with no extra lock button or reserved lock gap. */
-.workspace .board.board-pen-active:not(.board-multi-selected) .excalidraw .App-menu__left{
-  position:fixed!important;
-  top:calc(72px + env(safe-area-inset-top))!important;
-  left:calc(14px + env(safe-area-inset-left))!important;
-  bottom:auto!important;
-  margin-top:0!important;
-  max-height:calc(100dvh - 96px - env(safe-area-inset-top) - env(safe-area-inset-bottom))!important;
-  overflow-y:auto;
-}
-@media(max-width:650px){
-  .workspace .board.board-pen-active:not(.board-multi-selected) .excalidraw .App-menu__left{
-    top:calc(67px + env(safe-area-inset-top))!important;
-    left:calc(9px + env(safe-area-inset-left))!important;
-    max-height:calc(100dvh - 89px - env(safe-area-inset-top) - env(safe-area-inset-bottom))!important;
-  }
-}
 /* Keep native context-menu actions including the original Lock/Unlock option. */
 
 /* Visible selection rectangle for dragging from locked elements. */
@@ -228,29 +198,10 @@
   background:rgba(165,142,255,.17);
 }
 
-/* Small frosted, translucent white logout at the very bottom center. */
-.workspace .board-logout-bottom{
-  position:fixed!important;left:50%!important;right:auto!important;
-  top:auto!important;bottom:calc(7px + env(safe-area-inset-bottom))!important;
-  transform:translateX(-50%)!important;z-index:350;
-  min-height:29px;padding:5px 12px!important;font:500 11px system-ui!important;
-  border:1px solid rgba(255,255,255,.5)!important;border-radius:999px!important;
-  background:rgba(88,80,110,.28)!important;color:#fff!important;
-  text-shadow:0 1px 2px rgba(0,0,0,.75);
-  box-shadow:0 2px 12px #0002!important;
-  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
-  opacity:.8;cursor:pointer;touch-action:manipulation;
-}
-.workspace .board-logout-bottom:hover,.workspace .board-logout-bottom:focus-visible{opacity:1;background:rgba(88,80,110,.48)!important}
-.workspace .sticker-global-error{position:fixed;top:auto;bottom:48px;z-index:500}
-
 @media(max-width:650px){
-  .workspace-toolbox{top:calc(9px + env(safe-area-inset-top));right:calc(9px + env(safe-area-inset-right))}
   .workspace-toolbox-trigger{min-width:43px;min-height:43px;padding:8px 10px}
   .workspace-toolbox-label{display:none}
   .workspace-toolbox .workspace-toolbar{width:min(334px,calc(100vw - 18px));max-height:calc(100dvh - 75px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
-  .workspace .appearance-lock-bar{top:calc(67px + env(safe-area-inset-top));left:calc(9px + env(safe-area-inset-left));max-width:calc(100vw - 18px)}
-  .workspace .board.board-single-selected:not(.board-locked-selected):not(.board-media-selected) .excalidraw .App-menu__left{top:calc(145px + env(safe-area-inset-top))!important;left:calc(9px + env(safe-area-inset-left))!important;max-height:calc(100dvh - 167px - env(safe-area-inset-top) - env(safe-area-inset-bottom))!important}
   .workspace-toolbar .sticker-grid{max-height:33dvh}
 }
 @media(prefers-reduced-motion:reduce){
@@ -380,37 +331,78 @@
 .workspace .appearance-lock-bar:not(.appearance-lock-bar--embedded):not(:has(.voice-palette)){
   width:auto;min-width:110px;
 }
-.workspace .board.board-single-selected:not(.board-locked-selected):not(.board-media-selected) .excalidraw .App-menu__left{
-  top:calc(72px + env(safe-area-inset-top))!important;
-  max-height:calc(100dvh - 96px - env(safe-area-inset-top) - env(safe-area-inset-bottom))!important;
-}
-@media(max-width:650px){
-  .workspace .board.board-single-selected:not(.board-locked-selected):not(.board-media-selected) .excalidraw .App-menu__left{
-    top:calc(67px + env(safe-area-inset-top))!important;
-    max-height:calc(100dvh - 89px - env(safe-area-inset-top) - env(safe-area-inset-bottom))!important;
-  }
-}
-
 /* One world transform moves all overlays; card internals do not rerender on pan. */
 .board .media-world{overflow:visible;pointer-events:none;transform-origin:0 0}
-.save-indicator{position:fixed;bottom:8px;right:10px;z-index:140;max-width:min(350px,calc(100vw - 150px));display:flex;flex-direction:column;gap:4px;padding:5px 9px;border-radius:8px;background:var(--panel-bg,#fff);color:var(--panel-text,#333);font:12px system-ui;direction:rtl;box-shadow:0 1px 5px #0002;pointer-events:auto}
 .save-indicator button{font:inherit;border:1px solid #8885;border-radius:5px;cursor:pointer}
 .board-interacting .music-glass-card{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:0 1px 3px #0002!important}
-@media(max-width:600px){.save-indicator{font-size:10px;max-width:calc(100vw - 150px)}}
 .music-video-mount{flex:1;min-height:0;width:100%;display:flex}
 .music-video-mount iframe{height:100%;width:100%}
-@media(max-width:600px){.save-indicator{bottom:calc(52px + env(safe-area-inset-bottom));max-width:calc(100vw - 24px)}}
 .board .media-world,.board .image-ink-world{transform:translate(var(--world-x,0px),var(--world-y,0px)) scale(var(--world-zoom,1));transform-origin:0 0}
 
 /* Let the native hand tool receive drags over media, including embedded players. */
 .board.board-hand-active .media-world,
 .board.board-hand-active .media-world *{pointer-events:none!important}
 .board-navigation-toggle{
-  position:fixed;right:12px;bottom:calc(100px + env(safe-area-inset-bottom,0px));
-  z-index:150;width:44px;height:44px;
+  position:relative;flex:none;width:44px;height:44px;
   padding:0;border:1px solid #8886;border-radius:50%;
   background:var(--panel-bg,#fff);color:var(--panel-text,#333);
   box-shadow:0 2px 12px #0002;font:600 21px system-ui;direction:rtl;cursor:pointer;
 }
 .board-navigation-toggle[aria-pressed="true"]{border-color:#7865d9;background:#ede9ff;color:#35266f}
 .board-navigation-toggle:disabled{opacity:.5;cursor:wait}
+
+/* Application chrome has its own row; it never occupies the canvas toolbar. */
+.workspace-header{
+  position:relative;z-index:500;flex:none;display:flex;align-items:center;gap:12px;
+  padding:8px max(12px,env(safe-area-inset-right)) 8px max(12px,env(safe-area-inset-left));
+  padding-top:calc(8px + env(safe-area-inset-top));
+  min-height:60px;box-sizing:border-box;background:var(--panel-bg);border-bottom:1px solid var(--line);
+}
+.workspace-brand{font-size:15px;font-weight:700;white-space:nowrap;min-width:0}
+.workspace-brand span{color:#9274db}
+.workspace-header .save-indicator{
+  position:static;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  text-align:right;direction:rtl;font-size:12px;color:var(--panel-text);opacity:.8;
+}
+.workspace .board{padding-bottom:env(safe-area-inset-bottom);box-sizing:border-box}
+.workspace-toolbox .workspace-toolbar{max-height:calc(100dvh - 90px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
+.workspace-toolbar .music-panel form{display:flex;flex-wrap:wrap;gap:8px}
+.workspace-toolbar .music-panel form input{flex:1 1 140px;width:100%;box-sizing:border-box}
+.workspace-toolbar .music-panel form button{flex:1 0 auto;min-height:40px;white-space:normal}
+.workspace-toolbar .music-result{min-width:0}
+.workspace-toolbar .music-result>div{min-width:0;overflow-wrap:anywhere}
+.workspace-toolbar .music-add-options{display:flex;flex-wrap:wrap;gap:6px}
+.workspace-menu-footer{border-top:1px solid var(--line);padding-top:12px;margin-top:4px}
+.workspace-logout{width:100%;min-height:44px;border:1px solid #c84c6250;border-radius:12px;background:#c84c6210;color:#b52e49;font:600 13px system-ui;cursor:pointer}
+.workspace-dark .workspace-logout{color:#ffb3c1}
+.workspace-notices{flex:none;max-height:18dvh;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding:8px 12px;background:var(--panel-bg);color:var(--panel-text);border-bottom:1px solid var(--line);direction:rtl;overflow-wrap:anywhere}
+.workspace-notices button{min-height:32px;font:inherit;cursor:pointer}
+.workspace .board:is(.board-single-selected,.board-pen-active):not(.board-multi-selected):not(.board-locked-selected):not(.board-media-selected) .excalidraw .App-menu__left{
+  position:absolute!important;top:72px!important;left:12px!important;bottom:auto!important;
+  margin:0!important;max-height:calc(100% - 144px)!important;overflow-y:auto;overscroll-behavior:contain;
+}
+.workspace .appearance-lock-bar--embedded{max-height:none;overflow:visible}
+/* A drawer owns its area while open; underlying property cards cannot overlap it. */
+.workspace-tools-open .appearance-lock-bar,
+.workspace-tools-open .excalidraw .App-menu__left{visibility:hidden}
+@media(max-width:650px){
+  .workspace-header{gap:8px;padding-left:max(8px,env(safe-area-inset-left));padding-right:max(8px,env(safe-area-inset-right))}
+  .workspace-brand{font-size:12px}
+  .workspace-header .save-indicator{font-size:10px}
+  .workspace-toolbox .workspace-toolbar{width:min(342px,calc(100vw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right)))}
+  .workspace .appearance-lock-bar{left:8px;top:72px;max-width:calc(100% - 16px);max-height:calc(100% - 150px)}
+  .workspace .appearance-lock-bar--embedded{position:static;max-height:none}
+  .workspace-toolbar input{font-size:16px} /* Avoid iOS focus zoom. */
+}
+@media(max-height:500px){
+  .workspace-header{min-height:52px;padding-top:4px;padding-bottom:4px}
+  .workspace-toolbox .workspace-toolbar{max-height:calc(100dvh - 68px - env(safe-area-inset-bottom))}
+  .workspace .appearance-lock-bar{max-height:calc(100% - 120px)}
+}
+
+/* Mobile shape properties share the bottom sheet with our lock/image actions. */
+.workspace .excalidraw .App-mobile-menu{max-height:45dvh;overflow-y:auto;overscroll-behavior:contain}
+.workspace .board:is(.board-media-selected,.board-locked-selected,.board-multi-selected) .App-mobile-menu{display:none!important}
+.workspace-tools-open .excalidraw .App-mobile-menu{visibility:hidden}
+.workspace .excalidraw .App-bottom-bar>.Island{max-height:calc(100% - 76px)}
+.workspace .excalidraw .App-bottom-bar .App-toolbar{flex-shrink:0}

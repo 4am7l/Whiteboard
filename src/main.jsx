@@ -1045,8 +1045,13 @@ function App() {
   }
 
   function onChange(elements, appState, files) {
-    const sceneVersion=getSceneVersion(elements);
-    const changed=sceneCache.current?.elements!==elements||sceneCache.current?.version!==sceneVersion;
+    // Camera movement fires onChange every frame. Excalidraw keeps the same
+    // scene array when only appState changes, so avoid an O(N) scene-version
+    // scan on every pan/zoom frame (N can be hundreds of elements).
+    const cachedScene=sceneCache.current;
+    const sceneVersion=cachedScene?.elements===elements
+      ? cachedScene.version : getSceneVersion(elements);
+    const changed=cachedScene?.elements!==elements||cachedScene?.version!==sceneVersion;
     const filesChanged=sceneCache.current?.files!==files;
     if(changed){
     if(!applying.current){

@@ -351,21 +351,21 @@
 .board-navigation-toggle[aria-pressed="true"]{border-color:#7865d9;background:#ede9ff;color:#35266f}
 .board-navigation-toggle:disabled{opacity:.5;cursor:wait}
 
-/* Application chrome has its own row; it never occupies the canvas toolbar. */
-.workspace-header{
-  position:relative;z-index:500;flex:none;display:flex;align-items:center;gap:12px;
-  padding:8px max(12px,env(safe-area-inset-right)) 8px max(12px,env(safe-area-inset-left));
-  padding-top:calc(8px + env(safe-area-inset-top));
-  min-height:60px;box-sizing:border-box;background:var(--panel-bg);border-bottom:1px solid var(--line);
+/* Compact floating actions preserve the entire canvas viewport. */
+.workspace-quick-actions{
+  position:absolute;right:calc(12px + env(safe-area-inset-right));
+  bottom:calc(76px + env(safe-area-inset-bottom));z-index:500;
+  display:flex;align-items:center;gap:8px;pointer-events:none;
 }
-.workspace-brand{font-size:15px;font-weight:700;white-space:nowrap;min-width:0}
-.workspace-brand span{color:#9274db}
-.workspace-header .save-indicator{
-  position:static;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  text-align:right;direction:rtl;font-size:12px;color:var(--panel-text);opacity:.8;
+.workspace-quick-actions>button{pointer-events:auto;display:grid;place-items:center}
+.workspace-quick-actions .workspace-toolbox-trigger{width:44px;height:44px;min-width:44px;min-height:44px;padding:0;border-radius:50%}
+.workspace-toolbox-label{display:none}
+.workspace-toolbox .workspace-toolbar{
+  top:auto!important;bottom:calc(100% + 10px)!important;
+  max-height:calc(100dvh - 152px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
 }
+.workspace-toolbar .save-indicator{font-size:12px;direction:rtl;padding:2px 4px 10px;border-bottom:1px solid var(--line);overflow-wrap:anywhere;color:var(--panel-text)}
 .workspace .board{padding-bottom:env(safe-area-inset-bottom);box-sizing:border-box}
-.workspace-toolbox .workspace-toolbar{max-height:calc(100dvh - 90px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
 .workspace-toolbar .music-panel form{display:flex;flex-wrap:wrap;gap:8px}
 .workspace-toolbar .music-panel form input{flex:1 1 140px;width:100%;box-sizing:border-box}
 .workspace-toolbar .music-panel form button{flex:1 0 auto;min-height:40px;white-space:normal}
@@ -375,7 +375,7 @@
 .workspace-menu-footer{border-top:1px solid var(--line);padding-top:12px;margin-top:4px}
 .workspace-logout{width:100%;min-height:44px;border:1px solid #c84c6250;border-radius:12px;background:#c84c6210;color:#b52e49;font:600 13px system-ui;cursor:pointer}
 .workspace-dark .workspace-logout{color:#ffb3c1}
-.workspace-notices{flex:none;max-height:18dvh;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding:8px 12px;background:var(--panel-bg);color:var(--panel-text);border-bottom:1px solid var(--line);direction:rtl;overflow-wrap:anywhere}
+.workspace-notices{position:absolute;z-index:450;top:72px;left:50%;transform:translateX(-50%);width:min(480px,calc(100% - 32px));box-sizing:border-box;border-radius:12px;box-shadow:0 4px 16px #0002;max-height:18dvh;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding:8px 12px;background:var(--panel-bg);color:var(--panel-text);border-bottom:1px solid var(--line);direction:rtl;overflow-wrap:anywhere}
 .workspace-notices button{min-height:32px;font:inherit;cursor:pointer}
 .workspace .board:is(.board-single-selected,.board-pen-active):not(.board-multi-selected):not(.board-locked-selected):not(.board-media-selected) .excalidraw .App-menu__left{
   position:absolute!important;top:72px!important;left:12px!important;bottom:auto!important;
@@ -386,17 +386,12 @@
 .workspace-tools-open .appearance-lock-bar,
 .workspace-tools-open .excalidraw .App-menu__left{visibility:hidden}
 @media(max-width:650px){
-  .workspace-header{gap:8px;padding-left:max(8px,env(safe-area-inset-left));padding-right:max(8px,env(safe-area-inset-right))}
-  .workspace-brand{font-size:12px}
-  .workspace-header .save-indicator{font-size:10px}
   .workspace-toolbox .workspace-toolbar{width:min(342px,calc(100vw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right)))}
   .workspace .appearance-lock-bar{left:8px;top:72px;max-width:calc(100% - 16px);max-height:calc(100% - 150px)}
   .workspace .appearance-lock-bar--embedded{position:static;max-height:none}
   .workspace-toolbar input{font-size:16px} /* Avoid iOS focus zoom. */
 }
 @media(max-height:500px){
-  .workspace-header{min-height:52px;padding-top:4px;padding-bottom:4px}
-  .workspace-toolbox .workspace-toolbar{max-height:calc(100dvh - 68px - env(safe-area-inset-bottom))}
   .workspace .appearance-lock-bar{max-height:calc(100% - 120px)}
 }
 
@@ -406,3 +401,7 @@
 .workspace-tools-open .excalidraw .App-mobile-menu{visibility:hidden}
 .workspace .excalidraw .App-bottom-bar>.Island{max-height:calc(100% - 76px)}
 .workspace .excalidraw .App-bottom-bar .App-toolbar{flex-shrink:0}
+
+/* While mobile properties are open, keep quick actions above the sheet rather
+   than covering its colors. The sheet can still be closed with its Edit button. */
+.workspace:not(.workspace-tools-open):has(.App-mobile-menu) .workspace-quick-actions{visibility:hidden}
